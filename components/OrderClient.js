@@ -396,12 +396,14 @@ export default function OrderClient({ products, menus, loadError }) {
       )}
 
       {cartPreviewOpen ? (
-        <div
-          className="fixed inset-x-0 z-[35] max-h-[min(48dvh,22rem)] overflow-hidden border-t border-slate-200/90 bg-white shadow-[0_-8px_30px_-4px_rgba(0,0,0,0.12)] sm:max-h-[min(52vh,26rem)] bottom-[calc(7.25rem+env(safe-area-inset-bottom,0px))] sm:bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))]"
-          role="region"
-          aria-label="Warenkorb-Vorschau"
-        >
-          <div className="mx-auto max-h-[inherit] w-full max-w-4xl overflow-y-auto overscroll-y-contain px-4 pb-4 pt-3 [-webkit-overflow-scrolling:touch]">
+        <div className="fixed inset-0 z-[35] bg-slate-950/20" onClick={() => setCartPreviewOpen(false)} role="presentation">
+          <div
+            className="fixed inset-x-0 z-[36] max-h-[min(48dvh,22rem)] overflow-hidden border-t border-slate-200/90 bg-white shadow-[0_-8px_30px_-4px_rgba(0,0,0,0.12)] sm:max-h-[min(52vh,26rem)] bottom-[calc(7.25rem+env(safe-area-inset-bottom,0px))] sm:bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))]"
+            role="region"
+            aria-label="Warenkorb-Vorschau"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto max-h-[inherit] w-full max-w-4xl overflow-y-auto overscroll-y-contain px-4 pb-4 pt-3 [-webkit-overflow-scrolling:touch]">
             <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Ihr Warenkorb</p>
             {cartPreviewRows.length === 0 ? (
               <p className="mt-3 text-sm text-slate-600">Noch keine Artikel ausgewählt.</p>
@@ -429,6 +431,7 @@ export default function OrderClient({ products, menus, loadError }) {
               </ul>
             )}
             <p className="mt-3 text-right text-sm font-bold text-slate-900">Gesamt: {formatMoney(total)}</p>
+            </div>
           </div>
         </div>
       ) : null}
@@ -469,8 +472,17 @@ export default function OrderClient({ products, menus, loadError }) {
         onClose={() => setSuccess((s) => ({ ...s, open: false }))}
       />
       {outsideTimeModalOpen ? (
-        <div className="fixed inset-0 z-[95] flex items-end justify-center bg-slate-950/55 p-0 sm:items-center sm:p-4">
-          <div className="w-full max-w-md rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl sm:p-6">
+        <div
+          className="fixed inset-0 z-[95] flex items-end justify-center bg-slate-950/55 p-0 sm:items-center sm:p-4"
+          onClick={() => setOutsideTimeModalOpen(false)}
+          role="presentation"
+        >
+          <div
+            className="w-full max-w-md rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
             <h3 className="text-lg font-bold text-slate-900">Bestellung aktuell nicht möglich</h3>
             <p className="mt-2 text-sm leading-relaxed text-slate-700">
               Bestellungen sind nur zwischen 16:00 und 21:00 Uhr möglich.
