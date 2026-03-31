@@ -170,7 +170,7 @@ export default function OrderClient({ products, menus, loadError }) {
     setSending(false);
     if (!res.ok) {
       const msg = String(data.error || "Bestellung fehlgeschlagen.");
-      if (/16:00.*21:00/.test(msg)) {
+      if (/08:00.*21:00/.test(msg)) {
         setOutsideTimeModalOpen(true);
         return;
       }
@@ -199,10 +199,10 @@ export default function OrderClient({ products, menus, loadError }) {
         <div className="mt-3 rounded-2xl border border-white/25 bg-white/10 px-3 py-3 backdrop-blur-sm sm:mt-4 sm:px-4">
           <p className="text-sm font-semibold tracking-tight sm:text-base">Brötchenbestellungsformular</p>
           <p className="mt-2 text-sm leading-relaxed text-white/95">
-            Bestellung ist von 16:00 bis 21:00 Uhr möglich.
+            Bestellung ist von 08:00 bis 21:00 Uhr möglich.
           </p>
         </div>
-        <p className="mt-3 text-sm leading-snug text-white/90 sm:mt-4">Bestellung ist von 16:00 bis 21:00 Uhr möglich. · Abholung am nächsten Tag</p>
+        <p className="mt-3 text-sm leading-snug text-white/90 sm:mt-4">Bestellung ist von 08:00 bis 21:00 Uhr möglich. · Abholung am nächsten Tag</p>
       </section>
       {loadError ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm leading-relaxed text-red-800 break-words">
@@ -485,7 +485,7 @@ export default function OrderClient({ products, menus, loadError }) {
           >
             <h3 className="text-lg font-bold text-slate-900">Bestellung aktuell nicht möglich</h3>
             <p className="mt-2 text-sm leading-relaxed text-slate-700">
-              Bestellungen sind nur zwischen 16:00 und 21:00 Uhr möglich.
+              Bestellungen sind nur zwischen 08:00 und 21:00 Uhr möglich.
             </p>
             <div className="mt-6 flex justify-end">
               <button

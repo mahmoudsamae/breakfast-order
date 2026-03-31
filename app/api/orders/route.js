@@ -13,7 +13,7 @@ export async function POST(req) {
     if (!customerName) return NextResponse.json({ error: "Bitte Namen eingeben." }, { status: 400 });
 
     const { hour } = getBerlinNow();
-    if (!isOrderingOpen(hour)) return NextResponse.json({ error: "Bestellungen nur von 16:00 bis 21:00 Uhr." }, { status: 400 });
+    if (!isOrderingOpen(hour)) return NextResponse.json({ error: "Bestellungen nur von 08:00 bis 21:00 Uhr." }, { status: 400 });
 
     const supabase = getSupabaseServerClient();
     const [{ data: products }, { data: menus }] = await Promise.all([
