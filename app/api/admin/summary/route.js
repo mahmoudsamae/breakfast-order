@@ -54,24 +54,29 @@ export async function GET() {
 
   const orders = allOrders || [];
   const items = allItems || [];
+  const deliveredOrders = orders.filter((o) => o.status === "delivered");
+  const notPickedUpOrders = orders.filter((o) => o.status === "not_picked_up");
 
   const ordersToday = orders.filter((o) => berlinDateFromIso(o.created_at) === today);
+  const deliveredTodayOrders = deliveredOrders.filter((o) => {
+    const d = o.delivered_at ? berlinDateFromIso(o.delivered_at) : null;
+    return d === today;
+  });
+  const notPickedUpTodayOrders = notPickedUpOrders.filter((o) => berlinDateFromIso(o.created_at) === today);
   const ordersTodayIds = new Set(ordersToday.map((o) => o.id));
-  const revenueToday = ordersToday.reduce((a, o) => a + Number(o.total_amount || 0), 0);
+  const revenueToday = deliveredTodayOrders.reduce((a, o) => a + Number(o.total_amount || 0), 0);
   let itemsToday = 0;
   for (const i of items) {
     if (ordersTodayIds.has(i.order_id)) itemsToday += Number(i.quantity || 0);
   }
 
   const pendingToday = orders.filter((o) => o.status === "pending" && o.pickup_date === today).length;
-  const deliveredToday = orders.filter((o) => {
-    if (o.status !== "delivered") return false;
-    const d = o.delivered_at ? berlinDateFromIso(o.delivered_at) : null;
-    return d === today;
-  }).length;
+  const deliveredToday = deliveredTodayOrders.length;
+  const notPickedUpToday = notPickedUpTodayOrders.length;
 
   const totalOrders = orders.length;
-  const totalRevenue = orders.reduce((a, o) => a + Number(o.total_amount || 0), 0);
+  const totalRevenue = deliveredOrders.reduce((a, o) => a + Number(o.total_amount || 0), 0);
+  const notPickedUpTotal = notPickedUpOrders.length;
   const totalArticlesSold = items.reduce((a, i) => a + Number(i.quantity || 0), 0);
 
   const inThisCalendarWeek = (o) => {
@@ -85,10 +90,12 @@ export async function GET() {
 
   const weekOrders = orders.filter(inThisCalendarWeek);
   const prevWeekOrders = orders.filter(inPrevCalendarWeek);
+  const deliveredWeekOrders = deliveredOrders.filter(inThisCalendarWeek);
+  const deliveredPrevWeekOrders = deliveredOrders.filter(inPrevCalendarWeek);
   const ordersThisWeek = weekOrders.length;
-  const revenueThisWeek = weekOrders.reduce((a, o) => a + Number(o.total_amount || 0), 0);
+  const revenueThisWeek = deliveredWeekOrders.reduce((a, o) => a + Number(o.total_amount || 0), 0);
   const ordersLastWeek = prevWeekOrders.length;
-  const revenueLastWeek = prevWeekOrders.reduce((a, o) => a + Number(o.total_amount || 0), 0);
+  const revenueLastWeek = deliveredPrevWeekOrders.reduce((a, o) => a + Number(o.total_amount || 0), 0);
 
   const productTotals = new Map();
   const menuTotals = new Map();
@@ -145,8 +152,10 @@ export async function GET() {
     itemsToday,
     pendingToday,
     deliveredToday,
+    notPickedUpToday,
     totalOrders,
     totalRevenue,
+    notPickedUpTotal,
     totalArticlesSold,
     ordersThisWeek,
     revenueThisWeek,

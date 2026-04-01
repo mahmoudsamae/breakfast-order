@@ -8,6 +8,7 @@ import { formatMoney } from "@/lib/format-money";
 function statusLabel(s) {
   if (s === "pending") return "Ausstehend";
   if (s === "delivered") return "Ausgeliefert";
+  if (s === "not_picked_up") return "Nicht abgeholt";
   return s || "—";
 }
 
@@ -16,10 +17,14 @@ export default function StaffClient() {
   const [q, setQ] = useState("");
   const [orders, setOrders] = useState([]);
   const [preparationSummary, setPreparationSummary] = useState({ products: [], menus: [] });
+  const [preparationPacklist, setPreparationPacklist] = useState([]);
+  const [packOpen, setPackOpen] = useState(false);
   const [pickupDateLabel, setPickupDateLabel] = useState("");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
   const [detailId, setDetailId] = useState(null);
+  const [drinksOpen, setDrinksOpen] = useState(false);
+  const [confirmNotPickedUpId, setConfirmNotPickedUpId] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -34,6 +39,7 @@ export default function StaffClient() {
         menus: []
       }
     );
+    setPreparationPacklist(data.preparationPacklist || []);
     setPickupDateLabel(data.pickupDate || "");
     setLoading(false);
   }
@@ -51,14 +57,48 @@ export default function StaffClient() {
       return;
     }
     setDetailId(null);
-    setOrders((prev) => prev.filter((o) => o.id !== id));
+    await load();
   }
+
+  async function markNotPickedUp(id) {
+    const res = await fetch(`/api/staff/orders/${id}/not-picked-up`, { method: "PATCH" });
+    if (!res.ok) {
+      const data = await res.json();
+      setErr(data.error || "Status konnte nicht gesetzt werden.");
+      return;
+    }
+    setDetailId(null);
+    setConfirmNotPickedUpId(null);
+    await load();
+  }
+
+  useEffect(() => {
+    if (!confirmNotPickedUpId) return;
+    function onKeyDown(e) {
+      if (e.key === "Escape") setConfirmNotPickedUpId(null);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [confirmNotPickedUpId]);
 
   const detailOrder = detailId ? orders.find((o) => o.id === detailId) : null;
   const detailNameParts = useMemo(
     () => (detailOrder ? parseEigenesMenueFromCustomerName(detailOrder.customer_name) : { cleanName: "", groups: [] }),
     [detailOrder]
   );
+  const prepProductsPrimary = useMemo(
+    () => (preparationSummary.products || []).filter((x) => x.category !== "getraenke"),
+    [preparationSummary.products]
+  );
+  const prepProductsDrinks = useMemo(
+    () => (preparationSummary.products || []).filter((x) => x.category === "getraenke"),
+    [preparationSummary.products]
+  );
+  const matrixOrderNumbers = useMemo(() => {
+    const s = new Set();
+    for (const p of prepProductsPrimary) for (const x of p.per_order || []) s.add(Number(x.order_number));
+    return [...s].sort((a, b) => a - b);
+  }, [prepProductsPrimary]);
 
   return (
     <div className="space-y-5 pb-6 sm:space-y-6 sm:pb-8">
@@ -97,17 +137,42 @@ export default function StaffClient() {
         preparationSummary.menus.length === 0 ? (
           <p className="mt-3 text-sm text-slate-600">Keine offenen Bestellungen für diesen Tag – nichts zu aggregieren.</p>
         ) : null}
-        {preparationSummary.products.length > 0 ? (
+        {prepProductsPrimary.length > 0 ? (
           <div className="mt-4">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Produkte (Stück)</p>
-            <ul className="mt-2 space-y-1.5">
-              {preparationSummary.products.map((row) => (
-                <li key={row.name} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="min-w-0 break-words font-medium text-slate-800">{row.name}</span>
-                  <span className="tabular-nums font-bold text-amber-900">{row.qty}</span>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Backwaren & Extras (Stück)</p>
+            <ul className="mt-2 space-y-2">
+              {prepProductsPrimary.map((row) => (
+                <li key={row.name} className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="min-w-0 break-words font-medium text-slate-800">{row.name}</span>
+                    <span className="tabular-nums text-base font-black text-amber-900">{row.qty}x</span>
+                  </div>
                 </li>
               ))}
             </ul>
+          </div>
+        ) : null}
+        {prepProductsDrinks.length > 0 ? (
+          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+            <button
+              type="button"
+              onClick={() => setDrinksOpen((v) => !v)}
+              className="text-xs font-bold uppercase tracking-wide text-slate-700"
+            >
+              {drinksOpen ? "Heißgetränke ausblenden" : "Heißgetränke anzeigen"}
+            </button>
+            {drinksOpen ? (
+              <ul className="mt-2 space-y-1.5">
+                {prepProductsDrinks.map((row) => (
+                  <li key={row.name} className="rounded-lg border border-slate-100 bg-white px-2.5 py-2">
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="min-w-0 break-words font-medium text-slate-700">{row.name}</span>
+                      <span className="tabular-nums font-bold text-slate-900">{row.qty}x</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         ) : null}
         {preparationSummary.menus.length > 0 ? (
@@ -123,6 +188,15 @@ export default function StaffClient() {
             </ul>
           </div>
         ) : null}
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={() => setPackOpen(true)}
+            className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white"
+          >
+            Packliste anzeigen
+          </button>
+        </div>
       </section>
 
       <input
@@ -217,6 +291,7 @@ export default function StaffClient() {
                     const label = i.products?.name || i.menus?.name || "—";
                     const lineTotal = Number(i.quantity || 0) * Number(i.unit_price || 0);
                     const menuLines = isMenu ? menuCompositionLinesFromDescription(i.menus?.description) : [];
+                    const menuStruct = Array.isArray(i.menus?.menu_items) ? i.menus.menu_items : [];
                     return (
                       <li key={i.id} className="flex gap-3 px-4 py-3">
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-lg">{isMenu ? "📋" : "🥐"}</div>
@@ -230,7 +305,15 @@ export default function StaffClient() {
                           {isMenu ? (
                             <div className="mt-3 rounded-xl border border-amber-100/90 bg-amber-50/50 px-3 py-2">
                               <p className="text-[10px] font-bold uppercase tracking-wide text-amber-800/90">Inhalt (je Menü)</p>
-                              {menuLines.length > 0 ? (
+                              {menuStruct.length > 0 ? (
+                                <ul className="mt-2 space-y-1.5 border-l-2 border-amber-200/80 pl-3 text-sm text-slate-800">
+                                  {menuStruct.map((mi, li) => (
+                                    <li key={`${mi.product_id}-${li}`} className="leading-snug">
+                                      <span className="text-amber-700">–</span> {mi.quantity}× {mi.products?.name || "—"}
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : menuLines.length > 0 ? (
                                 <ul className="mt-2 space-y-1.5 border-l-2 border-amber-200/80 pl-3 text-sm text-slate-800">
                                   {menuLines.map((line, li) => (
                                     <li key={li} className="leading-snug">
@@ -298,12 +381,111 @@ export default function StaffClient() {
             </div>
 
             <div className="sticky bottom-0 border-t border-slate-100 bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom,0px)+0.75rem)] sm:p-5 sm:pb-5">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => deliver(detailOrder.id)}
+                  className="min-h-12 w-full rounded-2xl bg-emerald-600 py-3.5 text-sm font-bold text-white shadow-md hover:bg-emerald-700 active:bg-emerald-800"
+                >
+                  Als ausgeliefert markieren
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmNotPickedUpId(detailOrder.id)}
+                  className="min-h-12 w-full rounded-2xl bg-slate-700 py-3.5 text-sm font-bold text-white shadow-md hover:bg-slate-800 active:bg-slate-900"
+                >
+                  Nicht abgeholt
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {packOpen ? (
+        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/55 p-0 sm:items-center sm:p-4" onClick={() => setPackOpen(false)}>
+          <div
+            className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-white p-4 shadow-2xl sm:rounded-3xl sm:p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50/80 to-white p-3 shadow-sm sm:p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">Packliste-Matrix</h3>
+                <button
+                  type="button"
+                  onClick={() => setPackOpen(false)}
+                  className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-200"
+                >
+                  Schließen
+                </button>
+              </div>
+              <div className="max-h-[66dvh] overflow-auto rounded-xl border border-slate-200 bg-white">
+                <table className="min-w-full text-xs">
+                  <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur">
+                  <tr>
+                    <th className="sticky left-0 z-20 bg-slate-100/95 px-3 py-2.5 text-left font-bold text-slate-700">Bestellnr.</th>
+                    {prepProductsPrimary.map((p) => (
+                      <th key={p.name} className="px-3 py-2.5 text-left font-bold text-slate-700">
+                        <div className="whitespace-nowrap">{p.name}</div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {matrixOrderNumbers.map((n) => (
+                    <tr key={n} className="border-t border-slate-100 odd:bg-white even:bg-slate-50/50">
+                      <td className="sticky left-0 bg-inherit px-3 py-2 font-semibold text-slate-700">
+                        <span className="inline-flex rounded-full bg-slate-200/80 px-2 py-0.5 text-[11px]">#{n}</span>
+                      </td>
+                      {prepProductsPrimary.map((p) => {
+                        const q = (p.per_order || []).find((x) => Number(x.order_number) === n)?.qty || 0;
+                        return (
+                          <td key={`${n}-${p.name}`} className="px-3 py-2 text-center text-slate-700">
+                            {q > 0 ? `${q}x` : ""}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {confirmNotPickedUpId ? (
+        <div
+          className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/55 p-4"
+          onClick={() => setConfirmNotPickedUpId(null)}
+          role="presentation"
+        >
+          <div
+            className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-no-show-title"
+          >
+            <h3 id="confirm-no-show-title" className="text-lg font-bold text-slate-900">
+              Bestellung bestätigen
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-slate-700">
+              Möchten Sie diese Bestellung wirklich als 'nicht abgeholt' markieren?
+            </p>
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
-                onClick={() => deliver(detailOrder.id)}
-                className="min-h-12 w-full rounded-2xl bg-emerald-600 py-3.5 text-sm font-bold text-white shadow-md hover:bg-emerald-700 active:bg-emerald-800"
+                onClick={() => setConfirmNotPickedUpId(null)}
+                className="min-h-11 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:min-h-0 sm:py-2"
               >
-                Als ausgeliefert markieren
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={() => markNotPickedUp(confirmNotPickedUpId)}
+                className="min-h-11 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white hover:bg-slate-800 sm:min-h-0 sm:py-2"
+              >
+                Bestätigen
               </button>
             </div>
           </div>

@@ -219,6 +219,7 @@ export default function AdminClient() {
               <Kpi label="Artikel heute (Stück)" value={summary.itemsToday} />
               <Kpi label="Offene Bestellungen heute (Abholung)" value={summary.pendingToday} hint="Status ausstehend, Abholung heute" />
               <Kpi label="Ausgeliefert heute" value={summary.deliveredToday} hint="Auslieferung heute erfasst" />
+              <Kpi label="Nicht abgeholt heute" value={summary.notPickedUpToday || 0} hint="Als nicht abgeholt markiert" />
             </div>
           </section>
 
@@ -228,6 +229,7 @@ export default function AdminClient() {
               <Kpi label="Alle Bestellungen" value={summary.totalOrders} />
               <Kpi label="Gesamtumsatz" value={formatMoney(summary.totalRevenue)} />
               <Kpi label="Verkaufte Artikel (Stück)" value={summary.totalArticlesSold} />
+              <Kpi label="Nicht abgeholt gesamt" value={summary.notPickedUpTotal || 0} />
             </div>
           </section>
 
@@ -365,7 +367,15 @@ export default function AdminClient() {
       ) : null}
 
       {tab === "menus" ? (
-        <MenusTab menus={menus} onUpload={upload} onSave={saveMenu} onToggle={toggleMenu} onHardDelete={deleteMenuPermanently} onError={setErr} />
+        <MenusTab
+          menus={menus}
+          products={products}
+          onUpload={upload}
+          onSave={saveMenu}
+          onToggle={toggleMenu}
+          onHardDelete={deleteMenuPermanently}
+          onError={setErr}
+        />
       ) : null}
     </div>
   );
@@ -587,7 +597,7 @@ function ProductsTab({ products, onUpload, onSave, onCreate, onArchive, onHardDe
   );
 }
 
-function MenusTab({ menus, onUpload, onSave, onToggle, onHardDelete, onError }) {
+function MenusTab({ menus, products, onUpload, onSave, onToggle, onHardDelete, onError }) {
   const [editOpen, setEditOpen] = useState(false);
   const [draft, setDraft] = useState(null);
   const [creating, setCreating] = useState(false);
@@ -602,7 +612,12 @@ function MenusTab({ menus, onUpload, onSave, onToggle, onHardDelete, onError }) 
       description: m.description || "",
       price: m.price ?? 0,
       image_url: m.image_url || "",
-      is_active: m.is_active
+      is_active: m.is_active,
+      menu_items: Array.isArray(m.menu_items)
+        ? m.menu_items
+            .map((mi) => ({ product_id: Number(mi.product_id), quantity: Number(mi.quantity || 1) }))
+            .filter((mi) => Number.isInteger(mi.product_id) && mi.product_id > 0 && Number.isInteger(mi.quantity) && mi.quantity > 0)
+        : []
     });
     setEditOpen(true);
   }
@@ -610,7 +625,7 @@ function MenusTab({ menus, onUpload, onSave, onToggle, onHardDelete, onError }) 
   function openCreate() {
     onError("");
     setCreating(true);
-    setDraft({ name: "", description: "", price: 0, image_url: "", is_active: true });
+    setDraft({ name: "", description: "", price: 0, image_url: "", is_active: true, menu_items: [] });
     setEditOpen(true);
   }
 
@@ -704,6 +719,80 @@ function MenusTab({ menus, onUpload, onSave, onToggle, onHardDelete, onError }) 
                   onChange={(e) => setDraft({ ...draft, price: e.target.value })}
                 />
               </div>
+              <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50/60 p-3 sm:p-4">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold uppercase tracking-wide text-slate-500">Menü-Komposition</label>
+                  <button
+                    type="button"
+                    className="rounded-lg bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 ring-1 ring-slate-200"
+                    onClick={() =>
+                      setDraft((s) => ({
+                        ...s,
+                        menu_items: [...(s.menu_items || []), { product_id: "", quantity: 1 }]
+                      }))
+                    }
+                  >
+                    + Position
+                  </button>
+                </div>
+                {(draft.menu_items || []).length === 0 ? (
+                  <p className="text-xs text-slate-500">Keine Struktur hinterlegt. Beschreibung bleibt weiterhin sichtbar.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {(draft.menu_items || []).map((row, idx) => (
+                      <div key={idx} className="grid grid-cols-[1fr_90px_auto] items-center gap-2">
+                        <select
+                          className={productFormFieldClass}
+                          value={row.product_id}
+                          onChange={(e) =>
+                            setDraft((s) => {
+                              const next = [...(s.menu_items || [])];
+                              next[idx] = { ...next[idx], product_id: Number(e.target.value || 0) || "" };
+                              return { ...s, menu_items: next };
+                            })
+                          }
+                        >
+                          <option value="">Produkt wählen…</option>
+                          {products
+                            .filter((p) => p.is_active !== false)
+                            .sort((a, b) => a.name.localeCompare(b.name, "de"))
+                            .map((p) => (
+                              <option key={p.id} value={p.id}>
+                                [{productCategoryLabelDe(p.category)}] {p.name}
+                              </option>
+                            ))}
+                        </select>
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          className={productFormFieldClass}
+                          value={row.quantity}
+                          onChange={(e) =>
+                            setDraft((s) => {
+                              const next = [...(s.menu_items || [])];
+                              next[idx] = { ...next[idx], quantity: Math.max(1, Number(e.target.value || 1)) };
+                              return { ...s, menu_items: next };
+                            })
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-xs font-bold text-red-800"
+                          onClick={() =>
+                            setDraft((s) => ({
+                              ...s,
+                              menu_items: (s.menu_items || []).filter((_, i) => i !== idx)
+                            }))
+                          }
+                        >
+                          Entfernen
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold uppercase tracking-wide text-slate-500">Bild</label>
                 <CardImageMediaPreview src={draft.image_url} alt="" emojiFallback="📋" />
@@ -737,7 +826,14 @@ function MenusTab({ menus, onUpload, onSave, onToggle, onHardDelete, onError }) 
                   onError("");
                   const ok = creating
                     ? await onSave(draft, true)
-                    : await onSave({ id: draft.id, name: draft.name, description: draft.description, price: draft.price, image_url: draft.image_url });
+                    : await onSave({
+                        id: draft.id,
+                        name: draft.name,
+                        description: draft.description,
+                        price: draft.price,
+                        image_url: draft.image_url,
+                        menu_items: draft.menu_items
+                      });
                   if (ok) closeModal();
                 }}
                 className="min-h-11 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-slate-800 sm:min-h-0 sm:py-2"
