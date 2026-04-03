@@ -238,16 +238,6 @@ export default function OrderClient({ products, menus, loadError }) {
         </p>
       ) : null}
 
-      <div className="rounded-3xl bg-white p-3 ring-1 ring-slate-200 sm:p-4">
-        <button
-          type="button"
-          onClick={() => setEigenesModalOpen(true)}
-          className="min-h-12 w-full rounded-2xl border-2 border-dashed border-amber-300/90 bg-gradient-to-r from-amber-50/80 to-orange-50/60 px-3 py-3.5 text-sm font-bold text-amber-950 shadow-sm transition hover:border-amber-400 hover:from-amber-50 hover:to-orange-50 active:scale-[0.99]"
-        >
-          Eigenes Menü erstellen
-        </button>
-      </div>
-
       {eigenesMenueZusatz.length > 0 ? (
         <section className="space-y-2 scroll-mt-24">
           <h2 className="text-lg font-bold">Eigenes Menü (Zusatz)</h2>
@@ -287,32 +277,43 @@ export default function OrderClient({ products, menus, loadError }) {
         }}
       />
 
-      {menus.length > 0 ? (
-      <section className="space-y-3 scroll-mt-24">
-        <h2 className="text-lg font-bold">Menüs</h2>
-        {menus.map((m) => (
-          <div key={m.id} className="rounded-3xl bg-white p-3 ring-1 ring-slate-200 sm:p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
-              <div className="mx-auto shrink-0 sm:mx-0">
-                <CardImageMediaThumb src={m.image_url} alt={m.name} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="break-words font-bold leading-snug">{m.name}</p>
-                <p className="mt-1 break-words text-sm leading-relaxed text-slate-600">{m.description || "—"}</p>
-                <p className="mt-2 font-semibold text-amber-700">{formatMoney(m.price)}</p>
-                <div className="mt-3 flex justify-end sm:mt-4">
-                  <QuantityPicker
-                    size="compact"
-                    value={Number(menuQty[String(m.id)] || 0)}
-                    onChange={(v) => setMenuQty((s) => ({ ...s, [String(m.id)]: v }))}
-                  />
+      <section className="scroll-mt-24">
+        <h2 className="text-lg font-bold">Empfohlen</h2>
+        <div className="mt-3 space-y-3">
+          {menus.map((m) => (
+            <div key={m.id} className="rounded-3xl bg-white p-3 ring-1 ring-slate-200 sm:p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
+                <div className="mx-auto shrink-0 sm:mx-0">
+                  <CardImageMediaThumb src={m.image_url} alt={m.name} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="break-words font-bold leading-snug">{m.name}</p>
+                  <p className="mt-1 break-words text-sm leading-relaxed text-slate-600">{m.description || "—"}</p>
+                  <p className="mt-2 font-semibold text-amber-700">{formatMoney(m.price)}</p>
+                  <div className="mt-3 flex justify-end sm:mt-4">
+                    <QuantityPicker
+                      size="compact"
+                      value={Number(menuQty[String(m.id)] || 0)}
+                      onChange={(v) => setMenuQty((s) => ({ ...s, [String(m.id)]: v }))}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
+        <div
+          className={`rounded-3xl bg-white p-3 ring-1 ring-slate-200 sm:p-4 ${menus.length > 0 ? "mt-4 sm:mt-6" : "mt-3"}`}
+        >
+          <button
+            type="button"
+            onClick={() => setEigenesModalOpen(true)}
+            className="min-h-12 w-full rounded-2xl border-2 border-dashed border-amber-300/90 bg-gradient-to-r from-amber-50/80 to-orange-50/60 px-3 py-3.5 text-sm font-bold text-amber-950 shadow-sm transition hover:border-amber-400 hover:from-amber-50 hover:to-orange-50 active:scale-[0.99]"
+          >
+            Eigenes Menü erstellen
+          </button>
+        </div>
       </section>
-      ) : null}
 
       {products.length === 0 ? (
         <div className="rounded-2xl bg-white p-6 text-center ring-1 ring-slate-200">

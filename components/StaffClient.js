@@ -18,6 +18,7 @@ export default function StaffClient() {
   const [orders, setOrders] = useState([]);
   const [preparationSummary, setPreparationSummary] = useState({ products: [], menus: [] });
   const [preparationPacklist, setPreparationPacklist] = useState([]);
+  const [dayMatrixPacklist, setDayMatrixPacklist] = useState([]);
   const [packOpen, setPackOpen] = useState(false);
   const [pickupDateLabel, setPickupDateLabel] = useState("");
   const [err, setErr] = useState("");
@@ -40,6 +41,7 @@ export default function StaffClient() {
       }
     );
     setPreparationPacklist(data.preparationPacklist || []);
+    setDayMatrixPacklist(data.dayMatrixPacklist || []);
     setPickupDateLabel(data.pickupDate || "");
     setLoading(false);
   }
@@ -94,11 +96,16 @@ export default function StaffClient() {
     () => (preparationSummary.products || []).filter((x) => x.category === "getraenke"),
     [preparationSummary.products]
   );
+  /** Full-day packlist for matrix: pending + delivered + not_picked_up (non-drinks columns). */
+  const matrixProductsPrimary = useMemo(
+    () => (dayMatrixPacklist || []).filter((x) => x.category !== "getraenke"),
+    [dayMatrixPacklist]
+  );
   const matrixOrderNumbers = useMemo(() => {
     const s = new Set();
-    for (const p of prepProductsPrimary) for (const x of p.per_order || []) s.add(Number(x.order_number));
+    for (const p of matrixProductsPrimary) for (const x of p.per_order || []) s.add(Number(x.order_number));
     return [...s].sort((a, b) => a - b);
-  }, [prepProductsPrimary]);
+  }, [matrixProductsPrimary]);
 
   return (
     <div className="space-y-5 pb-6 sm:space-y-6 sm:pb-8">
@@ -152,16 +159,16 @@ export default function StaffClient() {
             </ul>
           </div>
         ) : null}
-        {prepProductsDrinks.length > 0 ? (
-          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/50 p-3">
-            <button
-              type="button"
-              onClick={() => setDrinksOpen((v) => !v)}
-              className="text-xs font-bold uppercase tracking-wide text-slate-700"
-            >
-              {drinksOpen ? "Heißgetränke ausblenden" : "Heißgetränke anzeigen"}
-            </button>
-            {drinksOpen ? (
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+          <button
+            type="button"
+            onClick={() => setDrinksOpen((v) => !v)}
+            className="min-h-10 w-full text-left text-xs font-bold uppercase tracking-wide text-slate-700 sm:min-h-0"
+          >
+            {drinksOpen ? "Heißgetränke ausblenden" : "Heißgetränke anzeigen"}
+          </button>
+          {drinksOpen ? (
+            prepProductsDrinks.length > 0 ? (
               <ul className="mt-2 space-y-1.5">
                 {prepProductsDrinks.map((row) => (
                   <li key={row.name} className="rounded-lg border border-slate-100 bg-white px-2.5 py-2">
@@ -172,9 +179,13 @@ export default function StaffClient() {
                   </li>
                 ))}
               </ul>
-            ) : null}
-          </div>
-        ) : null}
+            ) : (
+              <p className="mt-2 text-sm leading-relaxed text-slate-500">
+                Keine offenen Heißgetränke für diesen Tag. Es werden nur ausstehende Bestellungen gezählt.
+              </p>
+            )
+          ) : null}
+        </div>
         {preparationSummary.menus.length > 0 ? (
           <div className="mt-4">
             <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Menüs (Bestellungen)</p>
@@ -423,7 +434,7 @@ export default function StaffClient() {
                   <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur">
                   <tr>
                     <th className="sticky left-0 z-20 bg-slate-100/95 px-3 py-2.5 text-left font-bold text-slate-700">Bestellnr.</th>
-                    {prepProductsPrimary.map((p) => (
+                    {matrixProductsPrimary.map((p) => (
                       <th key={p.name} className="px-3 py-2.5 text-left font-bold text-slate-700">
                         <div className="whitespace-nowrap">{p.name}</div>
                       </th>
@@ -431,21 +442,32 @@ export default function StaffClient() {
                   </tr>
                 </thead>
                 <tbody>
-                  {matrixOrderNumbers.map((n) => (
-                    <tr key={n} className="border-t border-slate-100 odd:bg-white even:bg-slate-50/50">
-                      <td className="sticky left-0 bg-inherit px-3 py-2 font-semibold text-slate-700">
-                        <span className="inline-flex rounded-full bg-slate-200/80 px-2 py-0.5 text-[11px]">#{n}</span>
+                  {matrixOrderNumbers.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={Math.max(1, matrixProductsPrimary.length + 1)}
+                        className="px-3 py-6 text-center text-sm text-slate-500"
+                      >
+                        Keine Positionen für die Matrix an diesem Tag (ohne Heißgetränke).
                       </td>
-                      {prepProductsPrimary.map((p) => {
-                        const q = (p.per_order || []).find((x) => Number(x.order_number) === n)?.qty || 0;
-                        return (
-                          <td key={`${n}-${p.name}`} className="px-3 py-2 text-center text-slate-700">
-                            {q > 0 ? `${q}x` : ""}
-                          </td>
-                        );
-                      })}
                     </tr>
-                  ))}
+                  ) : (
+                    matrixOrderNumbers.map((n) => (
+                      <tr key={n} className="border-t border-slate-100 odd:bg-white even:bg-slate-50/50">
+                        <td className="sticky left-0 bg-inherit px-3 py-2 font-semibold text-slate-700">
+                          <span className="inline-flex rounded-full bg-slate-200/80 px-2 py-0.5 text-[11px]">#{n}</span>
+                        </td>
+                        {matrixProductsPrimary.map((p) => {
+                          const q = (p.per_order || []).find((x) => Number(x.order_number) === n)?.qty || 0;
+                          return (
+                            <td key={`${n}-${p.name}`} className="px-3 py-2 text-center text-slate-700">
+                              {q > 0 ? `${q}x` : ""}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))
+                  )}
                 </tbody>
                 </table>
               </div>
