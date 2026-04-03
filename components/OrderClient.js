@@ -14,6 +14,8 @@ import {
 } from "@/lib/eigenes-menue";
 import { groupProductsForOrderPage } from "@/lib/order-page-product-groups";
 import { formatMoney } from "@/lib/format-money";
+import { buildOrderSummarySnapshot } from "@/lib/order-cart-summary";
+import { readLastOrderSummary, writeLastOrderSummary } from "@/lib/last-order-storage";
 
 export default function OrderClient({ products, menus, loadError }) {
   const [name, setName] = useState("");
@@ -26,26 +28,36 @@ export default function OrderClient({ products, menus, loadError }) {
   const [nameError, setNameError] = useState("");
   const [nameFieldPulse, setNameFieldPulse] = useState(false);
   const [outsideTimeModalOpen, setOutsideTimeModalOpen] = useState(false);
-  const [success, setSuccess] = useState({ open: false, customerName: "", orderNumber: null });
+  const [success, setSuccess] = useState({
+    open: false,
+    customerName: "",
+    orderNumber: null,
+    total: 0,
+    lines: [],
+    savedAt: null
+  });
+  const [lastOrderStored, setLastOrderStored] = useState(null);
   const [sending, setSending] = useState(false);
   const [cartPreviewOpen, setCartPreviewOpen] = useState(false);
-
-  const eigenesZusatzSumme = useMemo(
-    () => eigenesMenueZusatz.reduce((a, z) => a + summeEigenesMenueZusatzEntry(z), 0),
-    [eigenesMenueZusatz]
-  );
 
   const { backwaren, heissgetraenke, marmeladeExtras } = useMemo(
     () => groupProductsForOrderPage(products),
     [products]
   );
 
-  const total = useMemo(() => {
-    let sum = 0;
-    for (const p of products) sum += Number(p.price || 0) * Number(productQty[String(p.id)] || 0);
-    for (const m of menus) sum += Number(m.price || 0) * Number(menuQty[String(m.id)] || 0);
-    return Math.round((sum + eigenesZusatzSumme) * 100) / 100;
-  }, [products, menus, productQty, menuQty, eigenesZusatzSumme]);
+  const orderSummarySnapshot = useMemo(
+    () =>
+      buildOrderSummarySnapshot({
+        products,
+        menus,
+        productQty,
+        menuQty,
+        eigenesMenueZusatz
+      }),
+    [products, menus, productQty, menuQty, eigenesMenueZusatz]
+  );
+  const total = orderSummarySnapshot.total;
+  const cartPreviewRows = orderSummarySnapshot.lines;
 
   const hasCartLines = useMemo(() => {
     for (const p of products) {
@@ -62,71 +74,30 @@ export default function OrderClient({ products, menus, loadError }) {
     if (!hasCartLines && cartPreviewOpen) setCartPreviewOpen(false);
   }, [hasCartLines, cartPreviewOpen]);
 
-  const cartPreviewRows = useMemo(() => {
-    const rows = [];
-    for (const p of products) {
-      const q = Number(productQty[String(p.id)] || 0);
-      if (q <= 0) continue;
-      const unit = Number(p.price || 0);
-      rows.push({
-        key: `p-${p.id}`,
-        icon: "🥐",
-        badge: "Backware",
-        title: p.name,
-        qty: q,
-        unit,
-        line: Math.round(q * unit * 100) / 100
+  useEffect(() => {
+    setLastOrderStored(readLastOrderSummary());
+  }, []);
+
+  useEffect(() => {
+    window.dispatchEvent(new Event("fruehstueck-last-order-changed"));
+  }, [lastOrderStored]);
+
+  useEffect(() => {
+    function onOpenLastOrder() {
+      const s = readLastOrderSummary();
+      if (!s) return;
+      setSuccess({
+        open: true,
+        customerName: s.customerName,
+        orderNumber: s.orderNumber,
+        total: s.total,
+        lines: s.lines,
+        savedAt: s.savedAt
       });
     }
-    for (const m of menus) {
-      const q = Number(menuQty[String(m.id)] || 0);
-      if (q <= 0) continue;
-      const unit = Number(m.price || 0);
-      rows.push({
-        key: `m-${m.id}`,
-        icon: "📋",
-        badge: "Menü",
-        title: m.name,
-        qty: q,
-        unit,
-        line: Math.round(q * unit * 100) / 100
-      });
-    }
-    eigenesMenueZusatz.forEach((z, idx) => {
-      rows.push({
-        key: `em-head-${idx}`,
-        header: true,
-        title: eigenesMenueZusatz.length > 1 ? `Eigenes Menü (${idx + 1})` : "Eigenes Menü (Zusatz)"
-      });
-      for (const [k, raw] of Object.entries(z.marmelade || {})) {
-        const n = Number(raw || 0);
-        if (n <= 0) continue;
-        const unit = Number(EIGENES_PREIS_MARMELADE[k] || 0);
-        const def = EIGENES_MARMELADE.find((x) => x.key === k);
-        rows.push({
-          key: `em-j-${idx}-${k}`,
-          icon: def?.icon || "🍯",
-          badge: "Marmelade",
-          title: def?.label || k,
-          qty: n,
-          unit,
-          line: Math.round(n * unit * 100) / 100
-        });
-      }
-      const d = EIGENES_GETRAENKE.find((x) => x.key === z.getraenk);
-      const gu = eigenesGetraenkPreis(z.getraenk);
-      rows.push({
-        key: `em-d-${idx}`,
-        icon: d?.icon || "☕",
-        badge: "Getränk",
-        title: d?.label || z.getraenk,
-        qty: 1,
-        unit: gu,
-        line: gu
-      });
-    });
-    return rows;
-  }, [products, menus, productQty, menuQty, eigenesMenueZusatz]);
+    window.addEventListener("fruehstueck-open-last-order", onOpenLastOrder);
+    return () => window.removeEventListener("fruehstueck-open-last-order", onOpenLastOrder);
+  }, []);
 
   function formatEigenesCartLine(z, idx) {
     const jamParts = Object.entries(z.marmelade || {})
@@ -177,7 +148,32 @@ export default function OrderClient({ products, menus, loadError }) {
       setBanner(msg);
       return;
     }
-    setSuccess({ open: true, customerName: name.trim(), orderNumber: data.orderNumber });
+    const snapshot = buildOrderSummarySnapshot({
+      products,
+      menus,
+      productQty,
+      menuQty,
+      eigenesMenueZusatz
+    });
+    const orderNumberNum = Number(data.orderNumber);
+    const payload = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      orderNumber: Number.isFinite(orderNumberNum) ? orderNumberNum : null,
+      customerName: name.trim(),
+      total: snapshot.total,
+      lines: snapshot.lines
+    };
+    writeLastOrderSummary(payload);
+    setLastOrderStored(readLastOrderSummary());
+    setSuccess({
+      open: true,
+      customerName: payload.customerName,
+      orderNumber: payload.orderNumber ?? data.orderNumber ?? null,
+      total: payload.total,
+      lines: payload.lines,
+      savedAt: payload.savedAt
+    });
     setCartPreviewOpen(false);
     setName("");
     setProductQty({});
@@ -470,6 +466,9 @@ export default function OrderClient({ products, menus, loadError }) {
         open={success.open}
         customerName={success.customerName}
         orderNumber={success.orderNumber}
+        total={success.total}
+        lines={success.lines}
+        savedAt={success.savedAt}
         onClose={() => setSuccess((s) => ({ ...s, open: false }))}
       />
       {outsideTimeModalOpen ? (

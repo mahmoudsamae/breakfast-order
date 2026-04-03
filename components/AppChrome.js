@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { INTERNAL_ROLE_COOKIE } from "@/lib/auth-internal";
+import { readLastOrderSummary } from "@/lib/last-order-storage";
 
 export default function AppChrome() {
   const router = useRouter();
+  const pathname = usePathname();
+  const [hasLastOrder, setHasLastOrder] = useState(false);
   const [open, setOpen] = useState(false);
   const [u, setU] = useState("");
   const [p, setP] = useState("");
@@ -48,6 +51,19 @@ export default function AppChrome() {
     setErr("Ungültige Zugangsdaten.");
   }
 
+  useEffect(() => {
+    if (pathname !== "/order") {
+      setHasLastOrder(false);
+      return;
+    }
+    function syncLastOrder() {
+      setHasLastOrder(!!readLastOrderSummary());
+    }
+    syncLastOrder();
+    window.addEventListener("fruehstueck-last-order-changed", syncLastOrder);
+    return () => window.removeEventListener("fruehstueck-last-order-changed", syncLastOrder);
+  }, [pathname]);
+
   return (
     <>
       <header className="mb-5 flex items-center justify-between gap-3 sm:mb-6 sm:gap-4">
@@ -55,9 +71,20 @@ export default function AppChrome() {
           Frühstück bestellen
         </button>
         <nav className="flex shrink-0 gap-2 text-xs font-semibold">
-          <Link href="/order" className="min-h-11 rounded-full bg-white px-3 py-2.5 ring-1 ring-slate-200 sm:min-h-0 sm:py-1">
-            Bestellen
-          </Link>
+          {pathname !== "/order" ? (
+            <Link href="/order" className="min-h-11 rounded-full bg-white px-3 py-2.5 ring-1 ring-slate-200 sm:min-h-0 sm:py-1">
+              Bestellen
+            </Link>
+          ) : hasLastOrder ? (
+            <button
+              type="button"
+              title="Letzte Bestellung ansehen"
+              onClick={() => window.dispatchEvent(new Event("fruehstueck-open-last-order"))}
+              className="min-h-10 shrink-0 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-3 py-2 text-[11px] font-bold text-white shadow-sm ring-1 ring-amber-400/40 transition hover:brightness-105 active:brightness-95 sm:min-h-9 sm:px-3.5 sm:text-xs sm:py-1.5"
+            >
+              Letzte Bestellung
+            </button>
+          ) : null}
         </nav>
       </header>
       {open ? (
