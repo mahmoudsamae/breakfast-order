@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { parseEigenesMenueFromCustomerName } from "@/lib/eigenes-menue";
 import { menuCompositionLinesFromDescription } from "@/lib/staff-menu-display";
 import { formatMoney } from "@/lib/format-money";
+import RegistrationsStaffSection from "@/components/RegistrationsStaffSection";
 
 function statusLabel(s) {
   if (s === "pending") return "Ausstehend";
@@ -12,10 +13,12 @@ function statusLabel(s) {
   return s || "—";
 }
 
-export default function StaffClient() {
+export default function StaffClient({ apiPrefix = "/api/staff" }) {
+  const [activeTab, setActiveTab] = useState("orders");
   const [service, setService] = useState("today");
   const [q, setQ] = useState("");
   const [orders, setOrders] = useState([]);
+  const [catalog, setCatalog] = useState({ products: [], menus: [] });
   const [preparationSummary, setPreparationSummary] = useState({ products: [], menus: [] });
   const [preparationPacklist, setPreparationPacklist] = useState([]);
   const [dayMatrixPacklist, setDayMatrixPacklist] = useState([]);
@@ -26,11 +29,16 @@ export default function StaffClient() {
   const [detailId, setDetailId] = useState(null);
   const [drinksOpen, setDrinksOpen] = useState(false);
   const [confirmNotPickedUpId, setConfirmNotPickedUpId] = useState(null);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualSubmitting, setManualSubmitting] = useState(false);
+  const [manualCustomerName, setManualCustomerName] = useState("");
+  const [manualPickupDate, setManualPickupDate] = useState("");
+  const [manualProductQty, setManualProductQty] = useState({});
 
   async function load() {
     setLoading(true);
     setErr("");
-    const res = await fetch(`/api/staff/orders?service=${service}&q=${encodeURIComponent(q)}`, { cache: "no-store" });
+    const res = await fetch(`${apiPrefix}/orders?service=${service}&q=${encodeURIComponent(q)}`, { cache: "no-store" });
     const data = await res.json();
     if (!res.ok) setErr(data.error || "Fehler beim Laden.");
     setOrders(data.orders || []);
@@ -43,16 +51,17 @@ export default function StaffClient() {
     setPreparationPacklist(data.preparationPacklist || []);
     setDayMatrixPacklist(data.dayMatrixPacklist || []);
     setPickupDateLabel(data.pickupDate || "");
+    setCatalog(data.catalog || { products: [], menus: [] });
     setLoading(false);
   }
 
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [service, q]);
+  }, [service, q, apiPrefix]);
 
   async function deliver(id) {
-    const res = await fetch(`/api/staff/orders/${id}/deliver`, { method: "PATCH" });
+    const res = await fetch(`${apiPrefix}/orders/${id}/deliver`, { method: "PATCH" });
     if (!res.ok) {
       const data = await res.json();
       setErr(data.error || "Status konnte nicht gesetzt werden.");
@@ -63,7 +72,7 @@ export default function StaffClient() {
   }
 
   async function markNotPickedUp(id) {
-    const res = await fetch(`/api/staff/orders/${id}/not-picked-up`, { method: "PATCH" });
+    const res = await fetch(`${apiPrefix}/orders/${id}/not-picked-up`, { method: "PATCH" });
     if (!res.ok) {
       const data = await res.json();
       setErr(data.error || "Status konnte nicht gesetzt werden.");
@@ -106,30 +115,111 @@ export default function StaffClient() {
     for (const p of matrixProductsPrimary) for (const x of p.per_order || []) s.add(Number(x.order_number));
     return [...s].sort((a, b) => a - b);
   }, [matrixProductsPrimary]);
+  const manualTotal = useMemo(() => {
+    let sum = 0;
+    for (const p of catalog.products || []) {
+      const qty = Number(manualProductQty[String(p.id)] || 0);
+      if (qty > 0) sum += qty * Number(p.price || 0);
+    }
+    return Math.round(sum * 100) / 100;
+  }, [catalog, manualProductQty]);
+
+  function todayIsoLocal() {
+    return new Date().toLocaleDateString("en-CA");
+  }
+
+  function openManualOrder() {
+    setErr("");
+    setManualPickupDate(todayIsoLocal());
+    setManualCustomerName("");
+    setManualProductQty({});
+    setManualOpen(true);
+  }
+
+  async function submitManualOrder() {
+    setErr("");
+    setManualSubmitting(true);
+    const payload = {
+      customerName: manualCustomerName.trim(),
+      pickupDate: manualPickupDate || todayIsoLocal(),
+      productQuantities: manualProductQty
+    };
+    const res = await fetch(`${apiPrefix}/orders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    setManualSubmitting(false);
+    if (!res.ok) {
+      setErr(data.error || "Vor-Ort-Verkauf konnte nicht gespeichert werden.");
+      return;
+    }
+    setManualOpen(false);
+    await load();
+  }
 
   return (
     <div className="space-y-5 pb-6 sm:space-y-6 sm:pb-8">
       <section className="rounded-3xl bg-gradient-to-br from-amber-600 via-orange-500 to-rose-500 p-5 text-white shadow-xl sm:p-6">
         <p className="text-xs uppercase tracking-[0.2em] text-white/75">Team</p>
-        <h1 className="mt-2 text-xl font-bold leading-tight sm:text-2xl">Offene Bestellungen</h1>
-        <p className="mt-2 text-sm leading-snug text-white/90">Karte antippen für Details · Suche nach Name oder Bestellnummer</p>
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3">
+        <h1 className="mt-2 text-xl font-bold leading-tight sm:text-2xl">Staff-Dashboard</h1>
+        <p className="mt-2 text-sm leading-snug text-white/90">Erleichtert die Abläufe für Team und Gäste.</p>
+        {activeTab === "orders" ? (
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={openManualOrder}
+              className="min-h-11 rounded-2xl bg-white px-4 py-2.5 text-sm font-bold text-amber-900 shadow-md"
+            >
+              + Vor-Ort-Verkauf
+            </button>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="rounded-3xl border border-slate-200/90 bg-white p-3 shadow-sm sm:p-4">
+        <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
-            className={`min-h-12 rounded-2xl px-3 py-2.5 text-sm font-bold transition active:scale-[0.99] sm:min-h-0 ${service === "today" ? "bg-white text-amber-900 shadow-md" : "bg-white/15 text-white hover:bg-white/25"}`}
-            onClick={() => setService("today")}
+            onClick={() => setActiveTab("orders")}
+            className={`min-h-11 rounded-2xl px-3 py-2 text-sm font-bold transition ${activeTab === "orders" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
           >
-            Heute
+            Bestellungen
           </button>
           <button
             type="button"
-            className={`min-h-12 rounded-2xl px-3 py-2.5 text-sm font-bold transition active:scale-[0.99] sm:min-h-0 ${service === "tomorrow" ? "bg-white text-amber-900 shadow-md" : "bg-white/15 text-white hover:bg-white/25"}`}
-            onClick={() => setService("tomorrow")}
+            onClick={() => setActiveTab("registrations")}
+            className={`min-h-11 rounded-2xl px-3 py-2 text-sm font-bold transition ${activeTab === "registrations" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
           >
-            Morgen
+            Registrierungen
           </button>
         </div>
       </section>
+
+      {activeTab === "registrations" ? <RegistrationsStaffSection apiPrefix={apiPrefix} /> : null}
+      {activeTab === "orders" ? (
+        <>
+          <section className="rounded-3xl bg-gradient-to-br from-amber-600/90 via-orange-500/90 to-rose-500/90 p-4 text-white shadow-md sm:p-5">
+            <p className="text-sm font-semibold">Bestellansicht</p>
+            <p className="mt-1 text-xs text-white/90">Schnell erfassen, ausliefern und im Blick behalten.</p>
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:gap-3">
+              <button
+                type="button"
+                className={`min-h-12 rounded-2xl px-3 py-2.5 text-sm font-bold transition active:scale-[0.99] sm:min-h-0 ${service === "today" ? "bg-white text-amber-900 shadow-md" : "bg-white/15 text-white hover:bg-white/25"}`}
+                onClick={() => setService("today")}
+              >
+                Heute
+              </button>
+              <button
+                type="button"
+                className={`min-h-12 rounded-2xl px-3 py-2.5 text-sm font-bold transition active:scale-[0.99] sm:min-h-0 ${service === "tomorrow" ? "bg-white text-amber-900 shadow-md" : "bg-white/15 text-white hover:bg-white/25"}`}
+                onClick={() => setService("tomorrow")}
+              >
+                Morgen
+              </button>
+            </div>
+          </section>
 
       <section className="rounded-3xl border border-amber-200/80 bg-white p-4 shadow-md ring-1 ring-slate-200/90 sm:p-5">
         <h2 className="text-base font-bold leading-snug text-slate-900">
@@ -258,6 +348,94 @@ export default function StaffClient() {
           </li>
         ))}
       </ul>
+
+      {manualOpen ? (
+        <div className="fixed inset-0 z-[85] flex items-end justify-center bg-slate-950/55 p-0 sm:items-center sm:p-4" onClick={() => setManualOpen(false)}>
+          <div
+            className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-white p-4 shadow-2xl sm:rounded-3xl sm:p-5"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Vor-Ort-Verkauf erfassen</h3>
+                <p className="mt-1 text-sm text-slate-600">Wird als Quelle „staff“ gespeichert und erscheint direkt in der Tagesliste.</p>
+              </div>
+              <button type="button" onClick={() => setManualOpen(false)} className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                Schließen
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <input
+                className="min-h-11 rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
+                placeholder="Name (optional)"
+                value={manualCustomerName}
+                onChange={(e) => setManualCustomerName(e.target.value)}
+              />
+              <input
+                type="date"
+                className="min-h-11 rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
+                value={manualPickupDate}
+                onChange={(e) => setManualPickupDate(e.target.value)}
+              />
+            </div>
+
+            <div className="mt-4">
+              <div className="rounded-2xl border border-slate-200 p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Backwaren (Vor-Ort)</p>
+                <div className="mt-2 space-y-2">
+                  {(catalog.products || []).map((p) => (
+                    <div key={`mp-${p.id}`} className="flex items-center justify-between gap-3 text-sm">
+                      <span className="min-w-0 flex-1 break-words">{p.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-500">{formatMoney(p.price)}</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          className="w-16 rounded-lg border border-slate-200 px-2 py-1 text-right"
+                          value={manualProductQty[String(p.id)] ?? ""}
+                          onChange={(e) =>
+                            setManualProductQty((s) => ({
+                              ...s,
+                              [String(p.id)]: Math.max(0, Number(e.target.value || 0))
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 flex items-center justify-between rounded-2xl bg-slate-900 px-4 py-3 text-white">
+              <span className="text-sm font-medium text-white/80">Gesamtsumme</span>
+              <span className="text-lg font-black">{formatMoney(manualTotal)}</span>
+            </div>
+
+            <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setManualOpen(false)}
+                className="min-h-11 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:min-h-0 sm:py-2"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={submitManualOrder}
+                disabled={manualSubmitting}
+                className="min-h-11 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60 sm:min-h-0 sm:py-2"
+              >
+                {manualSubmitting ? "Speichern…" : "Vor-Ort-Verkauf speichern"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {detailOrder ? (
         <div
@@ -512,6 +690,8 @@ export default function StaffClient() {
             </div>
           </div>
         </div>
+      ) : null}
+        </>
       ) : null}
     </div>
   );

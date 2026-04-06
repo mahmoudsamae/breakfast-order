@@ -2,5 +2,7 @@
 node_modules
 .env.local
 .env
+scripts/import-regensburg/env.import
+scripts/import-regensburg/export/*.csv
 out
 dist

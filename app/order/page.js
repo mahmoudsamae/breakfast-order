@@ -1,28 +1,8 @@
-import AppChrome from "@/components/AppChrome";
-import OrderClient from "@/components/OrderClient";
-import { getSupabaseServerClient } from "@/lib/supabase";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
-export default async function OrderPage() {
-  const supabase = getSupabaseServerClient();
-  const [{ data: products, error: productsError }, { data: menus, error: menusError }] = await Promise.all([
-    supabase.from("products").select("id,name,price,image_url,is_active,category").eq("is_active", true).order("id"),
-    supabase.from("menus").select("id,name,description,price,image_url,is_active").eq("is_active", true).order("id")
-  ]);
-
-  const error = [productsError?.message, menusError?.message].filter(Boolean).join(" · ");
-
-  return (
-    <div className="mx-auto min-h-screen w-full max-w-4xl px-4 pb-[max(8.5rem,env(safe-area-inset-bottom,0px)+6.5rem)] pt-4 sm:pt-5 md:pb-36 md:pt-6">
-      <AppChrome />
-      <OrderClient products={products || []} menus={menus || []} loadError={error || ""} />
-      <footer className="mt-10 border-t border-slate-200/80 pt-4 text-center text-xs leading-relaxed text-slate-500">
-        <p className="font-medium text-slate-600/90">AZUR Camping Regensburg</p>
-        <p>Digitale Frühstücksbestellung</p>
-        <p>Entwickelt von Mahmud Al Hussen</p>
-      </footer>
-    </div>
-  );
+/** @deprecated Use /b/[slug]/order. Redirect uses NEXT_PUBLIC_DEFAULT_BRANCH_SLUG when set. */
+export default function LegacyOrderRedirect() {
+  const slug = process.env.NEXT_PUBLIC_DEFAULT_BRANCH_SLUG;
+  if (!slug) redirect("/");
+  redirect(`/b/${slug}/order`);
 }

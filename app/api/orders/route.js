@@ -1,10 +1,27 @@
 import { NextResponse } from "next/server";
+import { fetchBranchBySlug } from "@/lib/branch-server";
 import { formatEigenesMenueZusatzNote, validateEigenesMenueZusatzEntries } from "@/lib/eigenes-menue";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { getBerlinNow, isOrderingOpen, MAX_QTY_PER_ITEM, tomorrowBerlinDate } from "@/lib/order-utils";
 
+/**
+ * Legacy POST /api/orders — uses NEXT_PUBLIC_DEFAULT_BRANCH_SLUG. Prefer POST /api/branches/[slug]/orders.
+ */
 export async function POST(req) {
   try {
+    const defaultSlug = process.env.NEXT_PUBLIC_DEFAULT_BRANCH_SLUG;
+    if (!defaultSlug) {
+      return NextResponse.json(
+        { error: "Bitte die Bestellseite über einen Standort-Link (/b/...) nutzen." },
+        { status: 400 }
+      );
+    }
+
+    const { branch, error: brErr } = await fetchBranchBySlug(defaultSlug);
+    if (brErr || !branch) {
+      return NextResponse.json({ error: "Standort nicht konfiguriert." }, { status: 404 });
+    }
+
     const body = await req.json();
     const customerName = (body.customerName || "").trim();
     const productQuantities = body.productQuantities || {};
@@ -16,9 +33,11 @@ export async function POST(req) {
     if (!isOrderingOpen(hour)) return NextResponse.json({ error: "Bestellungen nur von 08:00 bis 21:00 Uhr." }, { status: 400 });
 
     const supabase = getSupabaseServerClient();
+    const branchId = branch.id;
+
     const [{ data: products }, { data: menus }] = await Promise.all([
-      supabase.from("products").select("id,price,is_active"),
-      supabase.from("menus").select("id,price,is_active")
+      supabase.from("products").select("id,price,is_active").eq("branch_id", branchId),
+      supabase.from("menus").select("id,price,is_active").eq("branch_id", branchId)
     ]);
     const productMap = Object.fromEntries((products || []).map((p) => [String(p.id), p]));
     const menuMap = Object.fromEntries((menus || []).map((m) => [String(m.id), m]));
@@ -63,9 +82,19 @@ export async function POST(req) {
       p_pickup_date: tomorrowBerlinDate(),
       p_source: "qr",
       p_items: items,
-      p_total_amount: grandTotal
+      p_total_amount: grandTotal,
+      p_branch_id: branchId
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const regNum = body.registrationNumber != null ? Number(body.registrationNumber) : NaN;
+    if (Number.isFinite(regNum) && regNum > 0) {
+      await supabase
+        .from("registrations_analytics")
+        .update({ breakfast_ordered: true })
+        .eq("branch_id", branchId)
+        .eq("registration_number", Math.floor(regNum));
+    }
 
     return NextResponse.json({ orderNumber: data?.[0]?.order_number, orderId: data?.[0]?.order_id });
   } catch (e) {

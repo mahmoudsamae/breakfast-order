@@ -16,8 +16,9 @@ import { groupProductsForOrderPage } from "@/lib/order-page-product-groups";
 import { formatMoney } from "@/lib/format-money";
 import { buildOrderSummarySnapshot } from "@/lib/order-cart-summary";
 import { readLastOrderSummary, writeLastOrderSummary } from "@/lib/last-order-storage";
+import { clearRegistrationNumberSession, readRegistrationNumberSession } from "@/lib/registration-session";
 
-export default function OrderClient({ products, menus, loadError }) {
+export default function OrderClient({ products, menus, loadError, branchSlug, orderApiPath, branchDisplayName }) {
   const [name, setName] = useState("");
   const nameInputRef = useRef(null);
   const [productQty, setProductQty] = useState({});
@@ -75,8 +76,8 @@ export default function OrderClient({ products, menus, loadError }) {
   }, [hasCartLines, cartPreviewOpen]);
 
   useEffect(() => {
-    setLastOrderStored(readLastOrderSummary());
-  }, []);
+    setLastOrderStored(readLastOrderSummary(branchSlug));
+  }, [branchSlug]);
 
   useEffect(() => {
     window.dispatchEvent(new Event("fruehstueck-last-order-changed"));
@@ -84,7 +85,7 @@ export default function OrderClient({ products, menus, loadError }) {
 
   useEffect(() => {
     function onOpenLastOrder() {
-      const s = readLastOrderSummary();
+      const s = readLastOrderSummary(branchSlug);
       if (!s) return;
       setSuccess({
         open: true,
@@ -126,7 +127,8 @@ export default function OrderClient({ products, menus, loadError }) {
     }
     setNameError("");
     setSending(true);
-    const res = await fetch("/api/orders", {
+    const registrationNumber = readRegistrationNumberSession(branchSlug);
+    const res = await fetch(orderApiPath || "/api/orders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -134,7 +136,8 @@ export default function OrderClient({ products, menus, loadError }) {
         productQuantities: productQty,
         menuQuantities: menuQty,
         eigenesMenueZusatz: eigenesMenueZusatz.length > 0 ? eigenesMenueZusatz : undefined,
-        source: "qr"
+        source: "qr",
+        registrationNumber: registrationNumber ?? undefined
       })
     });
     const data = await res.json();
@@ -148,6 +151,7 @@ export default function OrderClient({ products, menus, loadError }) {
       setBanner(msg);
       return;
     }
+    clearRegistrationNumberSession(branchSlug);
     const snapshot = buildOrderSummarySnapshot({
       products,
       menus,
@@ -164,8 +168,8 @@ export default function OrderClient({ products, menus, loadError }) {
       total: snapshot.total,
       lines: snapshot.lines
     };
-    writeLastOrderSummary(payload);
-    setLastOrderStored(readLastOrderSummary());
+    writeLastOrderSummary(payload, branchSlug);
+    setLastOrderStored(readLastOrderSummary(branchSlug));
     setSuccess({
       open: true,
       customerName: payload.customerName,

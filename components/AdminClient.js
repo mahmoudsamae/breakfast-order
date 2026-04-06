@@ -9,11 +9,11 @@ import {
   PRODUCT_CATEGORY_FORM_OPTIONS
 } from "@/lib/product-category";
 
-async function upload(file, folder) {
+async function upload(file, folder, apiPrefix) {
   const fd = new FormData();
   fd.append("file", file);
   fd.append("folder", folder);
-  const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
+  const res = await fetch(`${apiPrefix}/upload`, { method: "POST", body: fd });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Upload fehlgeschlagen.");
   return data.url;
@@ -42,7 +42,7 @@ function Kpi({ label, value, hint }) {
   );
 }
 
-export default function AdminClient() {
+export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = "" }) {
   const [tab, setTab] = useState("overview");
   const [summary, setSummary] = useState(null);
   const [products, setProducts] = useState([]);
@@ -53,9 +53,9 @@ export default function AdminClient() {
     setErr("");
     try {
       const [s, p, m] = await Promise.all([
-        fetch("/api/admin/summary", { cache: "no-store" }),
-        fetch("/api/admin/products", { cache: "no-store" }),
-        fetch("/api/admin/menus", { cache: "no-store" })
+        fetch(`${apiPrefix}/summary`, { cache: "no-store" }),
+        fetch(`${apiPrefix}/products`, { cache: "no-store" }),
+        fetch(`${apiPrefix}/menus`, { cache: "no-store" })
       ]);
       const [sd, pd, md] = await Promise.all([s.json(), p.json(), m.json()]);
       if (!s.ok) throw new Error(sd.error || "Übersicht konnte nicht geladen werden.");
@@ -74,7 +74,7 @@ export default function AdminClient() {
   }, [loadAll]);
 
   async function saveProduct(p) {
-    const res = await fetch("/api/admin/products", {
+    const res = await fetch(`${apiPrefix}/products`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -95,7 +95,7 @@ export default function AdminClient() {
   }
 
   async function createProduct(p) {
-    const res = await fetch("/api/admin/products", {
+    const res = await fetch(`${apiPrefix}/products`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -116,7 +116,7 @@ export default function AdminClient() {
   }
 
   async function archiveProduct(p, active) {
-    const res = await fetch("/api/admin/products", {
+    const res = await fetch(`${apiPrefix}/products`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: p.id, is_active: active })
@@ -130,7 +130,7 @@ export default function AdminClient() {
   }
 
   async function deleteProductPermanently(id) {
-    const res = await fetch("/api/admin/products", {
+    const res = await fetch(`${apiPrefix}/products`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id })
@@ -145,7 +145,7 @@ export default function AdminClient() {
   }
 
   async function saveMenu(m, isNew = false) {
-    const res = await fetch("/api/admin/menus", {
+    const res = await fetch(`${apiPrefix}/menus`, {
       method: isNew ? "POST" : "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(m)
@@ -164,7 +164,7 @@ export default function AdminClient() {
   }
 
   async function deleteMenuPermanently(id) {
-    const res = await fetch("/api/admin/menus", {
+    const res = await fetch(`${apiPrefix}/menus`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id })
@@ -182,9 +182,20 @@ export default function AdminClient() {
     ? Math.max(...summary.hourlyDistribution.map((h) => h.count), 1)
     : 1;
 
+  function uploadForBranch(file, folder) {
+    return upload(file, folder, apiPrefix);
+  }
+
   return (
     <div className="space-y-5 pb-10 sm:space-y-6 sm:pb-12">
-      <Hero title="Admin-Dashboard" subtitle="Übersicht, Produkte und Menüs · Daten stets aus der Datenbank" />
+      <Hero
+        title="Admin-Dashboard"
+        subtitle={
+          branchLabel
+            ? `${branchLabel} · Übersicht, Produkte und Menüs`
+            : "Übersicht, Produkte und Menüs · Daten stets aus der Datenbank"
+        }
+      />
 
       <div className="flex flex-wrap gap-2 sm:gap-2.5">
         {[
@@ -220,6 +231,29 @@ export default function AdminClient() {
               <Kpi label="Offene Bestellungen heute (Abholung)" value={summary.pendingToday} hint="Status ausstehend, Abholung heute" />
               <Kpi label="Ausgeliefert heute" value={summary.deliveredToday} hint="Auslieferung heute erfasst" />
               <Kpi label="Nicht abgeholt heute" value={summary.notPickedUpToday || 0} hint="Als nicht abgeholt markiert" />
+            </div>
+          </section>
+
+          <section>
+            <h2 className="mb-3 text-sm font-black uppercase tracking-wider text-slate-500">Gäste-Anmeldungen (/register)</h2>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <Kpi label="Anmeldungen heute (Eingang)" value={summary.registrationsToday ?? 0} hint="Nach Zeitstempel Anlage" />
+              <Kpi label="Anmeldungen gesamt" value={summary.registrationsTotal ?? 0} hint="Alle Einträge" />
+            </div>
+            <div className="mt-4 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-md">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Eingänge pro Tag (letzte Einträge)</p>
+              <ul className="mt-3 max-h-48 space-y-1.5 overflow-y-auto text-sm">
+                {(summary.registrationDailyCounts || []).length === 0 ? (
+                  <li className="text-slate-500">Noch keine Anmeldungen.</li>
+                ) : (
+                  summary.registrationDailyCounts.map((row) => (
+                    <li key={row.date} className="flex justify-between gap-3 border-b border-slate-100 pb-1 last:border-0">
+                      <span className="font-mono text-slate-700">{row.date}</span>
+                      <span className="font-bold tabular-nums text-slate-900">{row.count}</span>
+                    </li>
+                  ))
+                )}
+              </ul>
             </div>
           </section>
 
@@ -357,7 +391,7 @@ export default function AdminClient() {
       {tab === "products" ? (
         <ProductsTab
           products={products}
-          onUpload={upload}
+          onUpload={uploadForBranch}
           onSave={saveProduct}
           onCreate={createProduct}
           onArchive={archiveProduct}
@@ -370,7 +404,7 @@ export default function AdminClient() {
         <MenusTab
           menus={menus}
           products={products}
-          onUpload={upload}
+          onUpload={uploadForBranch}
           onSave={saveMenu}
           onToggle={toggleMenu}
           onHardDelete={deleteMenuPermanently}
