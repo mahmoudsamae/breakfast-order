@@ -8,6 +8,7 @@ import {
   productCategoryLabelDe,
   PRODUCT_CATEGORY_FORM_OPTIONS
 } from "@/lib/product-category";
+import { downloadOrdersExcel } from "@/lib/export-to-excel";
 
 async function upload(file, folder, apiPrefix) {
   const fd = new FormData();
@@ -48,6 +49,7 @@ export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = ""
   const [products, setProducts] = useState([]);
   const [menus, setMenus] = useState([]);
   const [err, setErr] = useState("");
+  const [exportingAll, setExportingAll] = useState(false);
 
   const loadAll = useCallback(async () => {
     setErr("");
@@ -186,6 +188,22 @@ export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = ""
     return upload(file, folder, apiPrefix);
   }
 
+  async function exportAllOrdersExcel() {
+    setExportingAll(true);
+    setErr("");
+    try {
+      const res = await fetch(`${apiPrefix}/orders-export?all=1`, { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Export fehlgeschlagen.");
+      const date = data.date || new Date().toLocaleDateString("en-CA");
+      downloadOrdersExcel(data.rows || [], `orders-all-${date}.xlsx`);
+    } catch (e) {
+      setErr(String(e.message || e));
+    } finally {
+      setExportingAll(false);
+    }
+  }
+
   return (
     <div className="space-y-5 pb-10 sm:space-y-6 sm:pb-12">
       <Hero
@@ -197,7 +215,7 @@ export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = ""
         }
       />
 
-      <div className="flex flex-wrap gap-2 sm:gap-2.5">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
         {[
           { id: "overview", label: "Übersicht" },
           { id: "products", label: "Produkte" },
@@ -214,6 +232,16 @@ export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = ""
             {t.label}
           </button>
         ))}
+        <div className="ml-auto">
+          <button
+            type="button"
+            onClick={exportAllOrdersExcel}
+            disabled={exportingAll}
+            className="min-h-11 rounded-2xl px-4 py-2.5 text-sm font-bold transition active:scale-[0.99] bg-emerald-100 text-emerald-900 ring-1 ring-emerald-200 disabled:opacity-60"
+          >
+            {exportingAll ? "Exporting..." : "Export All Orders"}
+          </button>
+        </div>
       </div>
 
       {err ? (
