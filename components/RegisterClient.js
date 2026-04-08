@@ -131,6 +131,7 @@ function FormSection({ title, hint, highlight, children }) {
 export default function RegisterClient({ branchSlug, branchName }) {
   const [form, setForm] = useState(defaultDraft);
   const [err, setErr] = useState("");
+  const [fieldErr, setFieldErr] = useState({});
   const [ok, setOk] = useState(false);
   const [registrationNumber, setRegistrationNumber] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -155,24 +156,42 @@ export default function RegisterClient({ branchSlug, branchName }) {
   }, [branchSlug, form, restored, ok]);
 
   function setField(key, value) {
+    setFieldErr((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
     setForm((f) => ({ ...f, [key]: value }));
   }
 
   function setCountryAndAutoNationality(countryValue) {
-    setForm((f) => {
-      const next = { ...f, country: countryValue };
-      if (!String(f.nationality || "").trim()) {
-        next.nationality = nationalityFromCountry(countryValue);
-      }
-      return next;
-    });
+    setForm((f) => ({
+      ...f,
+      country: countryValue,
+      nationality: nationalityFromCountry(countryValue)
+    }));
   }
 
   async function onSubmit(e) {
     e.preventDefault();
     setErr("");
+    const nextFieldErr = {};
     if (!isYmd(form.birth_date)) {
-      setErr("Bitte Geburtsdatum auswählen.");
+      nextFieldErr.birth_date = "Bitte geben Sie ein gültiges Geburtsdatum an.";
+    }
+    if (!String(form.phone || "").trim()) {
+      nextFieldErr.phone = "Bitte geben Sie eine Handynummer an.";
+    }
+    if (!String(form.email || "").trim()) {
+      nextFieldErr.email = "Bitte geben Sie eine E-Mailadresse an.";
+    }
+    if (!String(form.license_plate || "").trim()) {
+      nextFieldErr.license_plate = "Bitte geben Sie Ihr Kfz-Kennzeichen an.";
+    }
+    setFieldErr(nextFieldErr);
+    if (Object.keys(nextFieldErr).length > 0) {
+      setErr("Bitte prüfen Sie die markierten Pflichtfelder.");
       return;
     }
     setLoading(true);
@@ -235,6 +254,14 @@ export default function RegisterClient({ branchSlug, branchName }) {
           </p>
           <p className="mt-6 text-[11px] font-bold uppercase tracking-wider text-white/80">Ihre Anmeldenummer</p>
           <p className="mt-2 text-4xl font-black tabular-nums tracking-tight text-white sm:text-5xl">#{registrationNumber}</p>
+          <div className="mt-4">
+            <Link
+              href={`/b/${branchSlug}/register`}
+              className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-white/20 px-4 py-2.5 text-sm font-bold text-white ring-1 ring-white/35"
+            >
+              Zurück zur Registrierung
+            </Link>
+          </div>
           <p className="mt-5 text-sm leading-relaxed text-white/95">
             Wenn Sie möchten, können Sie jetzt direkt Frühstück für morgen bestellen.
           </p>
@@ -274,7 +301,7 @@ export default function RegisterClient({ branchSlug, branchName }) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="fb-card space-y-6">
+    <form onSubmit={onSubmit} className="fb-card space-y-6 [&_input]:w-full [&_select]:w-full [&_textarea]:w-full">
       <p className="text-xs leading-relaxed text-slate-500">
         Angaben für die Rezeption werden nur vorübergehend gespeichert und bei Erledigung oder Ablauf gelöscht. Dauerhaft
         werden nur anonymisierte Kennzahlen (ohne Namen, Kontaktdaten und Adresse) ausgewertet.
@@ -366,7 +393,7 @@ export default function RegisterClient({ branchSlug, branchName }) {
             />
           </div>
         </div>
-        <div>
+        <div className="sm:max-w-sm">
           <label className="fb-label" htmlFor="reg-birth">
             Geburtsdatum <span className="font-semibold text-amber-800">*</span>
           </label>
@@ -378,82 +405,93 @@ export default function RegisterClient({ branchSlug, branchName }) {
             value={form.birth_date}
             onChange={(e) => setField("birth_date", e.target.value)}
           />
+          {fieldErr.birth_date ? <p className="mt-1 text-xs text-red-700">{fieldErr.birth_date}</p> : null}
         </div>
       </FormSection>
 
       <FormSection title="Kontakt" hint="Für Rückfragen an der Rezeption.">
-        <div>
-          <label className="fb-label" htmlFor="reg-email">
-            E-Mail
-          </label>
-          <input
-            id="reg-email"
-            type="email"
-            className={keyInputClass}
-            autoComplete="email"
-            inputMode="email"
-            value={form.email}
-            onChange={(e) => setField("email", e.target.value)}
-          />
-        </div>
-        <div>
-          <label className="fb-label" htmlFor="reg-phone">
-            Telefon
-          </label>
-          <input
-            id="reg-phone"
-            type="tel"
-            className={keyInputClass}
-            autoComplete="tel"
-            inputMode="tel"
-            value={form.phone}
-            onChange={(e) => setField("phone", e.target.value)}
-          />
-        </div>
-        <div>
-          <label className="fb-label" htmlFor="reg-plate">
-            Kennzeichen
-          </label>
-          <input
-            id="reg-plate"
-            className={keyInputClass}
-            autoComplete="off"
-            placeholder="z. B. B-AB 1234"
-            value={form.license_plate}
-            onChange={(e) => setField("license_plate", e.target.value)}
-          />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="min-w-0">
+            <label className="fb-label" htmlFor="reg-phone">
+              Handynummer <span className="font-semibold text-amber-800">*</span>
+            </label>
+            <input
+              id="reg-phone"
+              type="tel"
+              required
+              className={keyInputClass}
+              autoComplete="tel"
+              inputMode="tel"
+              value={form.phone}
+              onChange={(e) => setField("phone", e.target.value)}
+            />
+            {fieldErr.phone ? <p className="mt-1 text-xs text-red-700">{fieldErr.phone}</p> : null}
+          </div>
+          <div className="min-w-0">
+            <label className="fb-label" htmlFor="reg-email">
+              E-Mailadresse <span className="font-semibold text-amber-800">*</span>
+            </label>
+            <input
+              id="reg-email"
+              type="email"
+              required
+              className={keyInputClass}
+              autoComplete="email"
+              inputMode="email"
+              value={form.email}
+              onChange={(e) => setField("email", e.target.value)}
+            />
+            {fieldErr.email ? <p className="mt-1 text-xs text-red-700">{fieldErr.email}</p> : null}
+          </div>
+          <div className="min-w-0 sm:col-span-2">
+            <label className="fb-label" htmlFor="reg-plate">
+              Kfz-Kennzeichen / License plate <span className="font-semibold text-amber-800">*</span>
+            </label>
+            <input
+              id="reg-plate"
+              required
+              className={keyInputClass}
+              autoComplete="off"
+              placeholder="z. B. B-AB 1234"
+              value={form.license_plate}
+              onChange={(e) => setField("license_plate", e.target.value)}
+            />
+            {fieldErr.license_plate ? <p className="mt-1 text-xs text-red-700">{fieldErr.license_plate}</p> : null}
+          </div>
         </div>
       </FormSection>
 
-      <FormSection title="Weitere Angaben" hint="Optional — Land, Hinweise; weitere Felder bei Bedarf.">
-        <div>
-          <label className="fb-label" htmlFor="reg-nationality">
-            Staatsangehörigkeit
-          </label>
-          <input
-            id="reg-nationality"
-            className={keyInputClass}
-            value={form.nationality}
-            onChange={(e) => setField("nationality", e.target.value)}
-          />
-        </div>
-        <div>
-          <label className="fb-label" htmlFor="reg-country">
-            Land
-          </label>
-          <select
-            id="reg-country"
-            className="fb-input"
-            value={form.country}
-            onChange={(e) => setCountryAndAutoNationality(e.target.value)}
-          >
-            <option value="">Bitte wählen…</option>
-            {COUNTRY_OPTIONS.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+      <FormSection title="Weitere Angaben" hint="Land zuerst wählen — Staatsangehörigkeit wird automatisch gefüllt.">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="min-w-0">
+            <label className="fb-label" htmlFor="reg-country">
+              Land
+            </label>
+            <select
+              id="reg-country"
+              className="fb-input text-base"
+              value={form.country}
+              onChange={(e) => setCountryAndAutoNationality(e.target.value)}
+            >
+              <option value="">Bitte wählen…</option>
+              {COUNTRY_OPTIONS.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="min-w-0">
+            <label className="fb-label" htmlFor="reg-nationality">
+              Staatsangehörigkeit
+            </label>
+            <input
+              id="reg-nationality"
+              className={keyInputClass}
+              value={form.nationality}
+              onChange={(e) => setField("nationality", e.target.value)}
+            />
+          </div>
         </div>
         <div>
           <label className="fb-label" htmlFor="reg-notes">
@@ -507,7 +545,7 @@ export default function RegisterClient({ branchSlug, branchName }) {
             />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className="fb-label" htmlFor="reg-other-pets">
               Sonst. Tiere
@@ -531,7 +569,7 @@ export default function RegisterClient({ branchSlug, branchName }) {
             <input id="reg-idn" className="fb-input" value={form.id_number} onChange={(e) => setField("id_number", e.target.value)} />
           </div>
         </div>
-        <div>
+        <div className="sm:max-w-sm">
           <label className="fb-label" htmlFor="reg-pay">
             Zahlungsart
           </label>

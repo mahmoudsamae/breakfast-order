@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { CardImageMedia, CardImageMediaPreview } from "@/components/CardImageMedia";
 import { formatMoney } from "@/lib/format-money";
 import {
@@ -23,10 +24,13 @@ async function upload(file, folder, apiPrefix) {
 const productFormFieldClass =
   "min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-base text-slate-900 shadow-sm focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-200/50 sm:min-h-0 sm:text-sm";
 
-function Hero({ title, subtitle }) {
+function Hero({ title, subtitle, actions = null }) {
   return (
     <section className="rounded-3xl bg-gradient-to-br from-amber-600 via-orange-500 to-rose-500 p-5 text-white shadow-xl sm:p-6">
-      <p className="text-xs uppercase tracking-[0.2em] text-white/75">Verwaltung</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <p className="text-xs uppercase tracking-[0.2em] text-white/75">Verwaltung</p>
+        {actions}
+      </div>
       <h1 className="mt-2 text-xl font-bold leading-tight sm:text-2xl">{title}</h1>
       {subtitle ? <p className="mt-2 text-sm leading-snug text-white/90">{subtitle}</p> : null}
     </section>
@@ -43,7 +47,7 @@ function Kpi({ label, value, hint }) {
   );
 }
 
-export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = "" }) {
+export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = "", branchSlug = "" }) {
   const [tab, setTab] = useState("overview");
   const [summary, setSummary] = useState(null);
   const [products, setProducts] = useState([]);
@@ -212,6 +216,22 @@ export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = ""
           branchLabel
             ? `${branchLabel} · Übersicht, Produkte und Menüs`
             : "Übersicht, Produkte und Menüs · Daten stets aus der Datenbank"
+        }
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={branchSlug ? `/b/${branchSlug}/register` : "/"}
+              className="min-h-11 rounded-2xl bg-white/15 px-4 py-2.5 text-sm font-bold text-white ring-1 ring-white/30"
+            >
+              Zur Registrierung
+            </Link>
+            <Link
+              href={branchSlug ? `/b/${branchSlug}/order` : "/"}
+              className="min-h-11 rounded-2xl bg-white/15 px-4 py-2.5 text-sm font-bold text-white ring-1 ring-white/30"
+            >
+              Zum Frühstück
+            </Link>
+          </div>
         }
       />
 

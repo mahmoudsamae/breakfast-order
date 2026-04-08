@@ -22,7 +22,7 @@ export default async function BranchAdminPage({ params }) {
         </Link>
       </div>
       <BranchAppChrome branchSlug={slug} branchName={branch.name} />
-      <AdminClient apiPrefix={apiPrefix} branchLabel={branch.name} />
+      <AdminClient apiPrefix={apiPrefix} branchLabel={branch.name} branchSlug={slug} />
     </div>
   );
 }

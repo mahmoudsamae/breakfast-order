@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RegistrationPrintTemplate from "@/components/registration/RegistrationPrintTemplate";
 
 function formatDeDate(ymd) {
@@ -45,7 +45,7 @@ function CopyBtn({ label, text }) {
   return (
     <button
       type="button"
-      className="fb-btn-secondary shrink-0 px-2 py-1.5 text-xs"
+      className="shrink-0 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 shadow-sm hover:bg-slate-50"
       onClick={async () => {
         const ok = await copyToClipboard(text);
         if (ok) {
@@ -63,10 +63,10 @@ function FieldRow({ label, value, copyText }) {
   const display = value == null || value === "" ? "—" : String(value);
   const text = copyText != null ? String(copyText) : display === "—" ? "" : display;
   return (
-    <div className="flex items-end justify-between gap-2 border-b border-slate-100 pb-3">
+    <div className="flex items-end justify-between gap-2 border-b border-slate-200/80 pb-2.5 last:border-b-0 last:pb-0">
       <div className="min-w-0 flex-1">
-        <p className="fb-label">{label}</p>
-        <p className="whitespace-pre-wrap break-words text-sm font-semibold text-slate-900">{display}</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+        <p className="whitespace-pre-wrap break-words text-sm font-bold text-slate-950">{display}</p>
       </div>
       {text ? <CopyBtn label="Kopieren" text={text} /> : null}
     </div>
@@ -121,127 +121,80 @@ function receptionDeskText(r) {
 function IntakeDetailModal({ r, onClose, onPurge, onPrint, busyId }) {
   if (!r) return null;
 
-  const deskText = receptionDeskText(r);
   const periodLine = `${formatDeDate(r.arrival_date)} → ${formatDeDate(r.departure_date)}`;
   const guestLine = `E ${r.adults_count} · K ${r.children_count} · Kl ${r.infants_count} · Hunde ${r.dogs_count}${
     r.other_pets_count > 0 ? ` · sonst. Tiere ${r.other_pets_count}` : ""
   }`;
   const nationality = extractNationality(r);
 
-  const fullLines = [
-    `Anmeldenummer: ${r.registration_number}`,
-    `Anreise: ${r.arrival_date}`,
-    `Abreise: ${r.departure_date}`,
-    `Vorname: ${r.first_name}`,
-    `Nachname: ${r.last_name}`,
-    r.birth_date ? `Geburtsdatum: ${r.birth_date}` : null,
-    r.country ? `Land: ${r.country}` : null,
-    r.street ? `Straße: ${r.street}` : null,
-    r.postcode ? `PLZ: ${r.postcode}` : null,
-    r.city ? `Ort: ${r.city}` : null,
-    r.id_number ? `Ausweis/Dokument: ${r.id_number}` : null,
-    r.phone ? `Telefon: ${r.phone}` : null,
-    r.email ? `E-Mail: ${r.email}` : null,
-    r.license_plate ? `Kennzeichen: ${r.license_plate}` : null,
-    `Erwachsene: ${r.adults_count}`,
-    `Kinder: ${r.children_count}`,
-    `Kleinkinder: ${r.infants_count}`,
-    `Hunde: ${r.dogs_count}`,
-    `Sonstige Tiere: ${r.other_pets_count}`,
-    r.payment_method ? `Zahlungsart: ${r.payment_method}` : null,
-    r.notes ? `Hinweise: ${r.notes}` : null,
-    `Eingang: ${new Date(r.created_at).toLocaleString("de-DE")}`,
-    r.expires_at ? `Löschung vorgesehen: ${new Date(r.expires_at).toLocaleString("de-DE")}` : null
-  ].filter(Boolean);
-
-  const fullText = fullLines.join("\n");
-
   return (
     <div
-      className="fixed inset-0 z-[85] flex items-end justify-center bg-slate-950/55 p-0 sm:items-center sm:p-4"
+      className="fixed inset-0 z-[85] flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-[1.5px] sm:items-center sm:p-5"
       onClick={onClose}
       role="presentation"
     >
       <div
         role="dialog"
         aria-modal="true"
-        className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 shadow-2xl sm:max-h-[90vh] sm:rounded-2xl"
+        className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-2xl border border-slate-200/80 bg-slate-50 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.28)] sm:max-h-[90vh] sm:rounded-2xl sm:p-6 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300/80 [&::-webkit-scrollbar-thumb:hover]:bg-slate-400 [&::-webkit-scrollbar-track]:bg-transparent"
+        style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(148,163,184,0.9) transparent" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-2">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Anmeldenummer</p>
-            <p className="text-3xl font-black tabular-nums text-slate-900">#{r.registration_number}</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Anmeldenummer</p>
+            <p className="text-4xl font-black tabular-nums leading-none text-slate-900">#{r.registration_number}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700"
+            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm"
           >
             Schließen
           </button>
         </div>
 
-        <div className="mt-5 space-y-4">
-          <section className="rounded-xl border border-slate-200 p-3">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Aufenthalt</p>
-            <p className="mt-1 text-sm font-semibold text-slate-900">{periodLine}</p>
+        <div className="mt-5 space-y-3.5">
+          <section className="rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm">
+            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Aufenthalt</p>
+            <p className="mt-1 text-sm font-bold text-slate-900">{periodLine}</p>
           </section>
-          <section className="rounded-xl border border-slate-200 p-3 space-y-0">
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">Person</p>
-            <FieldRow label="Vorname" value={r.first_name} copyText={r.first_name || ""} />
+          <section className="rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm space-y-0">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Gäste</p>
+            <FieldRow label="Erwachsene" value={r.adults_count} />
+            <FieldRow label="Kinder" value={r.children_count} />
+            <FieldRow label="Kleinkinder" value={r.infants_count} />
+          </section>
+          <section className="rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm space-y-0">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Person</p>
             <FieldRow label="Nachname" value={r.last_name} copyText={r.last_name || ""} />
-            <FieldRow label="Geburtsdatum" value={r.birth_date ? formatDeDate(r.birth_date) : "—"} />
-            <FieldRow label="Staatsangehörigkeit" value={nationality} copyText={nationality} />
+            <FieldRow label="Vorname" value={r.first_name} copyText={r.first_name || ""} />
           </section>
-          <section className="rounded-xl border border-slate-200 p-3 space-y-0">
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">Kontakt</p>
+          <section className="rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm space-y-0">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Kontakt</p>
             <FieldRow label="E-Mail" value={r.email} copyText={r.email || ""} />
             <FieldRow label="Telefon" value={r.phone} copyText={r.phone || ""} />
           </section>
-          <section className="rounded-xl border border-slate-200 p-3 space-y-0">
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">Adresse</p>
+          <section className="rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm space-y-0">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Fahrzeug</p>
+            <FieldRow label="Kfz-Kennzeichen" value={r.license_plate} copyText={r.license_plate || ""} />
+          </section>
+          <section className="rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm space-y-0">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Identität</p>
+            <FieldRow label="Geburtsdatum" value={r.birth_date ? formatDeDate(r.birth_date) : "—"} />
+            <FieldRow label="Land" value={r.country} copyText={r.country || ""} />
+            <FieldRow label="Staatsangehörigkeit" value={nationality} copyText={nationality} />
+          </section>
+          <section className="rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm space-y-0">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Adresse</p>
             <FieldRow label="Straße" value={r.street} copyText={r.street || ""} />
             <FieldRow label="PLZ" value={r.postcode} copyText={r.postcode || ""} />
             <FieldRow label="Ort" value={r.city} copyText={r.city || ""} />
-            <FieldRow label="Land" value={r.country} copyText={r.country || ""} />
           </section>
-          <section className="rounded-xl border border-slate-200 p-3 space-y-0">
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">Fahrzeug / Ausweis</p>
-            <FieldRow label="Kfz-Kennzeichen" value={r.license_plate} copyText={r.license_plate || ""} />
-            <FieldRow label="Ausweisnummer" value={r.id_number} copyText={r.id_number || ""} />
-          </section>
-          <section className="rounded-xl border border-slate-200 p-3 space-y-0">
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">Gäste / Haustiere</p>
-            <FieldRow label="Gäste" value={guestLine} />
-            <FieldRow label="Sonstige Haustiere" value={r.other_pets_count} />
-          </section>
-          <section className="rounded-xl border border-slate-200 p-3 space-y-0">
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">Zahlung / Status</p>
-            <FieldRow label="Zahlungsart" value={r.payment_method} />
-            <FieldRow label="Eingang" value={new Date(r.created_at).toLocaleString("de-DE")} />
-          </section>
-        </div>
-
-        <div className="mt-5 rounded-2xl border-2 border-amber-200/90 bg-amber-50/90 p-4 shadow-sm ring-1 ring-amber-100">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-amber-900/90">Empfangsdaten kopieren</p>
-          <p className="mt-1 text-xs leading-relaxed text-amber-950/75">
-            Name, E-Mail, Telefon, Kennzeichen und Gästezahlen — ohne Aufenthalt, Geburtsdatum und Adresse.
-          </p>
-          <button
-            type="button"
-            className="fb-btn-primary mt-4 w-full py-3 text-sm font-bold shadow-sm"
-            onClick={() => copyToClipboard(deskText)}
-          >
-            Empfangsdaten kopieren
-          </button>
         </div>
 
         <div className="mt-6 flex flex-col gap-2 sm:flex-row">
           <PrintBtn r={r} onPrint={onPrint} className="fb-btn-secondary flex-1 border-slate-300 bg-white font-semibold text-slate-900" />
-          <button type="button" className="fb-btn-primary flex-1" onClick={() => copyToClipboard(fullText)}>
-            Vollständig kopieren
-          </button>
           <button
             type="button"
             disabled={busyId === r.id}
@@ -349,15 +302,21 @@ export default function RegistrationsStaffSection({ apiPrefix }) {
   const [arrivalFilter, setArrivalFilter] = useState("");
   const [detail, setDetail] = useState(null);
   const [printRow, setPrintRow] = useState(null);
+  const printInFlightRef = useRef(false);
+  const previousTitleRef = useRef("");
 
   function printRegistrationForm(row) {
+    if (printInFlightRef.current) return;
+    printInFlightRef.current = true;
+    previousTitleRef.current = document.title;
+    document.title = " ";
     setPrintRow(row);
     setTimeout(() => window.print(), 40);
   }
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ silent = false } = {}) => {
     setErr("");
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const res = await fetch(`${apiPrefix}/registrations`, { cache: "no-store", credentials: "include" });
       const data = await res.json();
@@ -369,7 +328,7 @@ export default function RegistrationsStaffSection({ apiPrefix }) {
       setPending([]);
       setCompleted([]);
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, [apiPrefix]);
 
   useEffect(() => {
@@ -377,8 +336,19 @@ export default function RegistrationsStaffSection({ apiPrefix }) {
   }, [load]);
 
   useEffect(() => {
+    const id = setInterval(() => {
+      load({ silent: true });
+    }, 7000);
+    return () => clearInterval(id);
+  }, [load]);
+
+  useEffect(() => {
     if (!printRow) return;
-    const done = () => setPrintRow(null);
+    const done = () => {
+      setPrintRow(null);
+      if (previousTitleRef.current) document.title = previousTitleRef.current;
+      printInFlightRef.current = false;
+    };
     window.addEventListener("afterprint", done);
     return () => window.removeEventListener("afterprint", done);
   }, [printRow]);
@@ -465,88 +435,73 @@ export default function RegistrationsStaffSection({ apiPrefix }) {
       {loading ? <p className="mt-3 text-sm text-slate-500">Lädt…</p> : null}
       {err ? <div className="fb-alert-error mt-3">{err}</div> : null}
 
-      {!loading && filteredPending.length === 0 && filteredCompleted.length === 0 ? (
+      {!loading && filteredPending.length === 0 ? (
         <p className="mt-3 text-sm text-slate-600">
           Keine Treffer
-          {pending.length + completed.length ? " (Filter)" : ""}.
+          {pending.length ? " (Filter)" : ""}.
         </p>
       ) : null}
 
       {filteredPending.length > 0 ? (
         <div className="mt-4">
           <p className="text-[11px] font-bold uppercase tracking-wider text-amber-800">Offen (mit Personendaten)</p>
-          <ul className="mt-2 space-y-2">
+          <ul className="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-2">
             {filteredPending.map((r) => (
               <li key={r.id}>
-                <div
-                  className={`flex w-full flex-wrap items-start justify-between gap-2 rounded-2xl border bg-slate-50/80 px-3 py-3 text-left sm:px-4 ${
-                    isSignatureRequired(r.country)
-                      ? "border-red-300 ring-1 ring-red-200"
-                      : "border-slate-100"
-                  }`}
-                >
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 text-left"
-                    onClick={() => setDetail({ kind: "intake", row: r })}
-                  >
-                    <p className="text-lg font-black tabular-nums text-amber-950">#{r.registration_number ?? "—"}</p>
-                    {isSignatureRequired(extractNationality(r)) ? (
-                      <span className="mt-1 inline-flex rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-800">
-                        Unterschrift erforderlich
-                      </span>
-                    ) : null}
-                    <p className="font-semibold text-slate-900">
-                      {[r.first_name, r.last_name].filter(Boolean).join(" ") || "—"}
-                    </p>
-                    <p className="mt-1 text-slate-700">
-                      {formatDeDate(r.arrival_date)} → {formatDeDate(r.departure_date)}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      E {r.adults_count} · K {r.children_count} · Kl. {r.infants_count}
-                    </p>
-                    <p className="mt-2 text-[11px] text-slate-400">Tippen für Details · Kopieren</p>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => purgeIntake(r.id)}
-                    disabled={busyId === r.id}
-                    className="shrink-0 rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
-                  >
-                    {busyId === r.id ? "…" : "Erledigt & löschen"}
-                  </button>
-                  {isSignatureRequired(extractNationality(r)) ? (
-                    <PrintBtn r={r} onPrint={printRegistrationForm} className="shrink-0 rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-800 hover:bg-slate-200" />
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+                {(() => {
+                  const signatureRequired = isSignatureRequired(extractNationality(r));
+                  return (
+                    <div
+                      className={`flex min-h-[214px] w-full flex-col rounded-2xl border px-4 py-4 shadow-sm ring-1 transition sm:px-5 sm:py-4 ${
+                        signatureRequired
+                          ? "border-rose-200 bg-rose-50/45 ring-rose-100"
+                          : "border-slate-200/90 bg-white ring-slate-100"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <p className="text-base font-black tabular-nums leading-none tracking-tight text-amber-950">#{r.registration_number ?? "—"}</p>
+                        </div>
+                        <div className="flex min-h-8 shrink-0 items-start justify-end gap-1.5">
+                          {signatureRequired ? (
+                            <PrintBtn
+                              r={r}
+                              onPrint={printRegistrationForm}
+                              className="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] font-bold text-slate-700 hover:bg-slate-50"
+                            />
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => purgeIntake(r.id)}
+                            disabled={busyId === r.id}
+                            className="inline-flex h-8 items-center rounded-lg bg-slate-900 px-2.5 text-[11px] font-bold text-white disabled:opacity-50"
+                          >
+                            {busyId === r.id ? "…" : "Erledigt & löschen"}
+                          </button>
+                        </div>
+                      </div>
 
-      {filteredCompleted.length > 0 ? (
-        <div className="mt-6">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Bearbeitet (nur Auswertungsdaten)</p>
-          <ul className="mt-2 space-y-1.5 opacity-95">
-            {filteredCompleted.slice(0, 40).map((r) => (
-              <li key={r.id}>
-                <button
-                  type="button"
-                  onClick={() => setDetail({ kind: "analytics", row: r })}
-                  className="flex w-full flex-wrap justify-between gap-2 rounded-xl border border-transparent px-1 py-1.5 text-left text-xs text-slate-600 hover:border-slate-200 hover:bg-slate-50"
-                >
-                  <span className="font-mono font-bold text-slate-800">#{r.registration_number ?? "—"}</span>
-                  <span>
-                    {formatDeDate(r.arrival_date)} · {r.stay_nights} N.
-                  </span>
-                  <span className="text-slate-400">{r.processed_at ? new Date(r.processed_at).toLocaleString("de-DE") : "—"}</span>
-                </button>
+                      <button
+                        type="button"
+                        className="mt-3 flex min-h-0 flex-1 flex-col text-left"
+                        onClick={() => setDetail({ kind: "intake", row: r })}
+                      >
+                        <p className="break-words text-[18px] font-bold leading-tight text-slate-900">
+                          {[r.first_name, r.last_name].filter(Boolean).join(" ") || "—"}
+                        </p>
+                        <p className="mt-2 text-sm font-medium leading-relaxed text-slate-700">
+                          {formatDeDate(r.arrival_date)} <span className="text-slate-400">→</span> {formatDeDate(r.departure_date)}
+                        </p>
+                        <p className="mt-1.5 text-xs font-medium text-slate-500">
+                          E {r.adults_count} · K {r.children_count} · Kl. {r.infants_count}
+                        </p>
+                        <p className="mt-auto pt-3 text-[11px] text-slate-400">Tippen für Details · Kopieren</p>
+                      </button>
+                    </div>
+                  );
+                })()}
               </li>
             ))}
-            {filteredCompleted.length > 40 ? (
-              <li className="text-[11px] text-slate-400">… und {filteredCompleted.length - 40} weitere</li>
-            ) : null}
           </ul>
         </div>
       ) : null}

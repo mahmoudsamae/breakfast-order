@@ -21,7 +21,26 @@ export default async function BranchStaffPage({ params }) {
           Interner Bereich
         </Link>
       </div>
-      <BranchAppChrome branchSlug={slug} branchName={branch.name} />
+      <BranchAppChrome
+        branchSlug={slug}
+        branchName={branch.name}
+        headerActions={
+          <>
+            <Link
+              href={`/b/${slug}/register`}
+              className="min-h-10 shrink-0 rounded-full bg-white px-3 py-2 text-[11px] font-bold text-slate-800 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50 sm:min-h-9 sm:px-3.5 sm:py-1.5 sm:text-xs"
+            >
+              Zur Registrierung
+            </Link>
+            <Link
+              href={`/b/${slug}/order`}
+              className="min-h-10 shrink-0 rounded-full bg-white px-3 py-2 text-[11px] font-bold text-slate-800 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50 sm:min-h-9 sm:px-3.5 sm:py-1.5 sm:text-xs"
+            >
+              Zum Frühstück
+            </Link>
+          </>
+        }
+      />
       <StaffClient apiPrefix={apiPrefix} />
     </div>
   );

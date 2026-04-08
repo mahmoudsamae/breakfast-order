@@ -22,7 +22,7 @@ function nationalityFromRegistration(registration) {
 }
 
 export default function RegistrationPrintTemplate({ registration }) {
-  const booking = field(registration, "booking_number", "reservation_number", "registration_number");
+  const booking = "";
   const arrival = field(registration, "arrival_date");
   const departure = field(registration, "departure_date");
   const lastName = field(registration, "last_name");
@@ -46,7 +46,7 @@ export default function RegistrationPrintTemplate({ registration }) {
 
   return (
     <>
-      <div className="registration-print-root">
+      <div id="registration-print-area" className="registration-print-root">
         <div className="registration-print-sheet">
           <div className="rp-header">
             <div className="rp-logo-row">
@@ -184,28 +184,47 @@ export default function RegistrationPrintTemplate({ registration }) {
           display: none;
         }
         @media print {
+          @page {
+            size: A4 portrait;
+            margin: 0;
+          }
+          html,
+          body {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 210mm;
+            height: 297mm;
+            background: white;
+            overflow: hidden !important;
+          }
           body * {
             visibility: hidden !important;
           }
-          .registration-print-root,
-          .registration-print-root * {
+          #registration-print-area,
+          #registration-print-area * {
             visibility: visible !important;
           }
-          .registration-print-root {
+          #registration-print-area {
             display: block !important;
             position: fixed;
-            inset: 0;
-            background: #fff;
-            z-index: 999999;
-          }
-          .registration-print-sheet {
+            left: 0;
+            top: 0;
             width: 210mm;
             min-height: 297mm;
-            margin: 0 auto;
+            background: #fff;
             padding: 10mm;
+            box-sizing: border-box;
+            overflow: hidden !important;
+          }
+          .registration-print-sheet {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
             box-sizing: border-box;
             color: #111;
             font-size: 11px;
+            overflow: hidden !important;
           }
         }
         .rp-header {

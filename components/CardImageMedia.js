@@ -31,8 +31,31 @@ export const CARD_MEDIA_IMG = "max-h-full max-w-full object-contain object-cente
 /** Menu row thumb: same heights, width = 4/3 × height. */
 export const CARD_MEDIA_THUMB_OUTER = `${CARD_MEDIA_BASE} w-[calc(140px*4/3)] sm:w-[calc(160px*4/3)]`;
 
+function normalizeImageSrc(src) {
+  let v = typeof src === "string" ? src.trim() : "";
+  if (!v) return "";
+
+  // Some rows contain wrapped quotes from manual imports.
+  v = v.replace(/^['"]+|['"]+$/g, "").trim();
+  if (!v) return "";
+
+  // Fix protocol-relative URLs.
+  if (v.startsWith("//")) return `https:${v}`;
+
+  // Keep absolute http(s) URLs as-is.
+  if (/^https?:\/\//i.test(v)) return v;
+
+  // Support relative Supabase public storage paths saved in DB.
+  if (v.startsWith("/")) {
+    const base = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim().replace(/\/+$/, "");
+    if (base) return `${base}${v}`;
+  }
+
+  return v;
+}
+
 export function CardImageMedia({ src, alt, emojiFallback = "🥐", variant = "default" }) {
-  const safe = typeof src === "string" ? src.trim() : "";
+  const safe = normalizeImageSrc(src);
   const bad = !safe || /^https?:\/\/https?:\/\//i.test(safe);
   const outer = variant === "orderGrid" ? CARD_MEDIA_ORDER_GRID_OUTER : CARD_MEDIA_OUTER;
   const inner = variant === "orderGrid" ? CARD_MEDIA_INNER_COMPACT : CARD_MEDIA_INNER;
@@ -54,7 +77,7 @@ export function CardImageMedia({ src, alt, emojiFallback = "🥐", variant = "de
 }
 
 export function CardImageMediaPreview({ src, alt, emojiFallback = "🥐" }) {
-  const safe = typeof src === "string" ? src.trim() : "";
+  const safe = normalizeImageSrc(src);
   const bad = !safe || /^https?:\/\/https?:\/\//i.test(safe);
   return (
     <div className={CARD_MEDIA_PREVIEW_OUTER}>
@@ -73,7 +96,7 @@ export function CardImageMediaPreview({ src, alt, emojiFallback = "🥐" }) {
 }
 
 export function CardImageMediaThumb({ src, alt, emojiFallback = "📋" }) {
-  const safe = typeof src === "string" ? src.trim() : "";
+  const safe = normalizeImageSrc(src);
   const bad = !safe || /^https?:\/\/https?:\/\//i.test(safe);
 
   return (

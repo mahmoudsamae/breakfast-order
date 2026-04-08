@@ -70,6 +70,9 @@ export async function POST(req) {
     const payment_method = trimOrNull(body.payment_method, 64);
     const notesRaw = body.notes != null ? String(body.notes) : "";
     const notes = composeNotesWithNationality(notesRaw, nationality);
+    if (!phone) {
+      return NextResponse.json({ error: "Telefonnummer ist erforderlich." }, { status: 400 });
+    }
 
     const adults_count = parsePosInt(body.adults_count, 0, 500, 0);
     const children_count = parsePosInt(body.children_count, 0, 500, 0);

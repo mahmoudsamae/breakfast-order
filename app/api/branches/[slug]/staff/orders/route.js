@@ -29,7 +29,7 @@ export async function GET(req, { params }) {
   const [{ data: productsData, error: productsErr }, { data: menusData, error: menusErr }] = await Promise.all([
     supabase
       .from("products")
-      .select("id,name,price,category,is_active")
+      .select("id,name,price,category,image_url,is_active")
       .eq("branch_id", branchId)
       .eq("category", "backwaren")
       .eq("is_active", true)

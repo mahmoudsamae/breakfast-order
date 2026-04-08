@@ -9,7 +9,7 @@ import { readLastOrderSummary } from "@/lib/last-order-storage";
  * Public branch header: same look as AppChrome, 3-tap opens entry to internal login (UI only).
  * No cross-links between /order and /register — only landing lists both flows.
  */
-export default function BranchAppChrome({ branchSlug, branchName }) {
+export default function BranchAppChrome({ branchSlug, branchName, headerActions = null }) {
   const pathname = usePathname();
   const base = `/b/${branchSlug}`;
   const orderPath = `${base}/order`;
@@ -65,6 +65,7 @@ export default function BranchAppChrome({ branchSlug, branchName }) {
           {titleText}
         </button>
         <nav className="flex shrink-0 flex-wrap justify-end gap-2 text-xs font-semibold">
+          {headerActions}
           {isOrder && hasLastOrder ? (
             <button
               type="button"

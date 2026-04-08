@@ -5,7 +5,7 @@ import { getSupabaseServerClient } from "@/lib/supabase";
 const DAY_MATRIX_STATUSES = ["pending", "delivered", "not_picked_up"];
 
 const ORDER_SELECT =
-  "id,order_number,customer_name,created_at,status,total_amount,pickup_date,order_items(id,quantity,unit_price,products(name,category),menus(id,name,description,menu_items(product_id,quantity,products(name,category))))";
+  "id,order_number,customer_name,created_at,status,total_amount,pickup_date,order_items(id,quantity,unit_price,products(name,category,image_url),menus(id,name,description,image_url,menu_items(product_id,quantity,products(name,category,image_url))))";
 
 function pickupDateForService(service) {
   const { date: today, hour } = getBerlinNow();
