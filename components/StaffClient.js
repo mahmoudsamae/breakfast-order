@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { parseEigenesMenueFromCustomerName } from "@/lib/eigenes-menue";
 import { menuCompositionLinesFromDescription } from "@/lib/staff-menu-display";
 import { formatMoney } from "@/lib/format-money";
@@ -13,7 +13,16 @@ function statusLabel(s) {
   return s || "—";
 }
 
+/** Fixed rows for the print-only Packliste summary (matches matrix product names). */
+const PACKLISTE_PRINT_SUMMARY_PRODUCTS = [
+  "Knusperbrötchen",
+  "Farmerbrötchen",
+  "Laugenbrezel",
+  "Buttercroissant"
+];
+
 export default function StaffClient({ apiPrefix = "/api/staff" }) {
+  const packlistePrintInFlightRef = useRef(false);
   const [activeTab, setActiveTab] = useState("orders");
   const [service, setService] = useState("today");
   const [q, setQ] = useState("");
@@ -123,6 +132,14 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
     for (const p of matrixProductsPrimary) for (const x of p.per_order || []) s.add(Number(x.order_number));
     return [...s].sort((a, b) => a - b);
   }, [matrixProductsPrimary]);
+  /** Print-only summary: day totals for fixed products (same qty source as matrix). */
+  const packlistePrintSummaryCounts = useMemo(() => {
+    const byName = new Map(matrixProductsPrimary.map((p) => [String(p.name), Number(p.qty || 0)]));
+    return PACKLISTE_PRINT_SUMMARY_PRODUCTS.map((name) => ({
+      name,
+      qty: byName.get(name) ?? 0
+    }));
+  }, [matrixProductsPrimary]);
 
   function todayIsoLocal() {
     return new Date().toLocaleDateString("en-CA");
@@ -161,15 +178,39 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
 
   function printPackliste() {
     if (typeof window === "undefined") return;
+    if (packlistePrintInFlightRef.current) return;
+    packlistePrintInFlightRef.current = true;
     const cls = "print-packliste-only";
+    const printAreas = [...document.querySelectorAll("#packliste-print-area")];
+    const activePrintArea = printAreas[0] || null;
+    for (const area of printAreas) area.removeAttribute("data-packliste-print-active");
+    if (activePrintArea) activePrintArea.setAttribute("data-packliste-print-active", "true");
+    const tableCount = activePrintArea?.querySelectorAll("table").length || 0;
+    const rowCount = activePrintArea?.querySelectorAll("tbody tr").length || 0;
+    const htmlLength = activePrintArea?.outerHTML.length || 0;
+    console.info("[Packliste print debug]", {
+      printAreaCount: printAreas.length,
+      tableCount,
+      rowCount,
+      htmlLength
+    });
+    let cleaned = false;
     const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      packlistePrintInFlightRef.current = false;
+      for (const area of document.querySelectorAll("#packliste-print-area")) {
+        area.removeAttribute("data-packliste-print-active");
+      }
+      document.documentElement.classList.remove(cls);
       document.body.classList.remove(cls);
       window.removeEventListener("afterprint", cleanup);
     };
+    document.documentElement.classList.add(cls);
     document.body.classList.add(cls);
     window.addEventListener("afterprint", cleanup, { once: true });
     window.print();
-    setTimeout(cleanup, 1200);
+    setTimeout(cleanup, 1500);
   }
 
   return (
@@ -635,7 +676,18 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
               </div>
             <p className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-700">Packliste-Matrix</p>
             <div id="packliste-print-area" className="max-h-[66dvh] overflow-auto rounded-xl border border-slate-200 bg-white">
-              <table className="min-w-full text-xs">
+              <div className="packliste-print-only packliste-print-summary" aria-hidden="true">
+                <p className="packliste-print-summary-title">Gesamt für heute</p>
+                <div className="packliste-print-summary-grid">
+                  {packlistePrintSummaryCounts.map(({ name, qty }) => (
+                    <div key={name} className="packliste-print-summary-cell">
+                      <span className="packliste-print-summary-name">{name}:</span>{" "}
+                      <span className="packliste-print-summary-qty">{qty}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <table className="min-w-full text-xs packliste-print-matrix-table">
                 <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur">
                   <tr>
                     <th className="sticky left-0 z-20 bg-slate-100/95 px-3 py-2.5 text-left font-bold text-slate-700">Bestellnr.</th>
@@ -681,26 +733,124 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
         </div>
       ) : null}
       <style jsx global>{`
+        @media screen {
+          #packliste-print-area .packliste-print-only {
+            display: none !important;
+          }
+        }
         @media print {
-          body.print-packliste-only * {
+          @page {
+            size: A4 portrait;
+            margin: 10mm;
+          }
+          html.print-packliste-only,
+          html.print-packliste-only body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+            overflow: hidden !important;
+            height: auto !important;
+            max-height: none !important;
+          }
+          html.print-packliste-only body * {
             visibility: hidden !important;
           }
-          body.print-packliste-only #packliste-print-area,
-          body.print-packliste-only #packliste-print-area * {
+          html.print-packliste-only body #packliste-print-area {
+            visibility: hidden !important;
+          }
+          html.print-packliste-only body #packliste-print-area[data-packliste-print-active="true"],
+          html.print-packliste-only body #packliste-print-area[data-packliste-print-active="true"] * {
             visibility: visible !important;
           }
-          body.print-packliste-only #packliste-print-area {
-            position: fixed !important;
+          html.print-packliste-only body #packliste-print-area[data-packliste-print-active="true"] {
+            position: absolute !important;
             left: 0 !important;
             top: 0 !important;
             width: 100% !important;
-            max-height: none !important;
+            max-width: 100% !important;
             overflow: visible !important;
             margin: 0 !important;
-            padding: 10mm !important;
+            padding: 0 !important;
             border: none !important;
             border-radius: 0 !important;
             background: #fff !important;
+            color: #1e293b !important;
+            page-break-after: auto !important;
+            break-after: auto !important;
+          }
+          html.print-packliste-only body #packliste-print-area[data-packliste-print-active="true"] .packliste-print-summary {
+            display: block !important;
+            margin: 0 0 5mm !important;
+            padding: 3.5mm 4mm !important;
+            border: 1px solid #cbd5e1 !important;
+            border-radius: 2px !important;
+            background: #f8fafc !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          html.print-packliste-only body #packliste-print-area[data-packliste-print-active="true"] .packliste-print-summary-title {
+            margin: 0 0 2.5mm !important;
+            font-size: 10pt !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.02em !important;
+            color: #0f172a !important;
+            border-bottom: 1px solid #e2e8f0 !important;
+            padding-bottom: 1.5mm !important;
+          }
+          html.print-packliste-only body #packliste-print-area[data-packliste-print-active="true"] .packliste-print-summary-grid {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 1.5mm 5mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            font-size: 9pt !important;
+            line-height: 1.35 !important;
+          }
+          html.print-packliste-only body #packliste-print-area[data-packliste-print-active="true"] .packliste-print-summary-cell {
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          html.print-packliste-only body #packliste-print-area[data-packliste-print-active="true"] .packliste-print-summary-name {
+            color: #334155 !important;
+          }
+          html.print-packliste-only body #packliste-print-area[data-packliste-print-active="true"] .packliste-print-summary-qty {
+            font-weight: 700 !important;
+            color: #0f172a !important;
+          }
+          html.print-packliste-only body #packliste-print-area[data-packliste-print-active="true"] .packliste-print-matrix-table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+            font-size: 9.5pt !important;
+            line-height: 1.35 !important;
+          }
+          html.print-packliste-only body #packliste-print-area[data-packliste-print-active="true"] .packliste-print-matrix-table thead th {
+            position: static !important;
+            padding: 3mm 2.5mm !important;
+            text-align: left !important;
+            vertical-align: bottom !important;
+            font-weight: 700 !important;
+            color: #0f172a !important;
+            background: #e2e8f0 !important;
+            border: 1px solid #94a3b8 !important;
+            border-bottom: 2px solid #64748b !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          html.print-packliste-only body #packliste-print-area[data-packliste-print-active="true"] .packliste-print-matrix-table tbody td {
+            position: static !important;
+            padding: 2.5mm 2.5mm !important;
+            border: 1px solid #e2e8f0 !important;
+            color: #1e293b !important;
+          }
+          html.print-packliste-only body #packliste-print-area[data-packliste-print-active="true"] .packliste-print-matrix-table tbody tr:nth-child(even) td {
+            background: #f8fafc !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          html.print-packliste-only body #packliste-print-area[data-packliste-print-active="true"] .packliste-print-matrix-table tbody tr:nth-child(odd) td {
+            background: #ffffff !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
         }
       `}</style>
