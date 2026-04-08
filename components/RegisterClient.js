@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   clearRegistrationDraft,
   readRegistrationDraft,
@@ -19,6 +20,7 @@ const defaultDraft = () => ({
   first_name: "",
   last_name: "",
   birth_date: "",
+  nationality: "",
   country: "",
   street: "",
   postcode: "",
@@ -30,6 +32,71 @@ const defaultDraft = () => ({
   payment_method: "",
   notes: ""
 });
+
+const COUNTRY_OPTIONS = [
+  "Deutschland",
+  "Österreich",
+  "Schweiz",
+  "Niederlande",
+  "Belgien",
+  "Frankreich",
+  "Italien",
+  "Spanien",
+  "Polen",
+  "Tschechien",
+  "Rumänien",
+  "Ungarn",
+  "Slowakei",
+  "Slowenien",
+  "Kroatien",
+  "Serbien",
+  "Bosnien und Herzegowina",
+  "Griechenland",
+  "Türkei",
+  "Ukraine",
+  "Syrien",
+  "Irak",
+  "Afghanistan",
+  "Iran",
+  "USA",
+  "Vereinigtes Königreich"
+];
+
+const COUNTRY_TO_NATIONALITY = {
+  deutschland: "Deutsch",
+  österreich: "Österreichisch",
+  schweiz: "Schweizerisch",
+  niederlande: "Niederländisch",
+  belgien: "Belgisch",
+  frankreich: "Französisch",
+  italien: "Italienisch",
+  spanien: "Spanisch",
+  polen: "Polnisch",
+  tschechien: "Tschechisch",
+  rumänien: "Rumänisch",
+  ungarn: "Ungarisch",
+  slowakei: "Slowakisch",
+  slowenien: "Slowenisch",
+  kroatien: "Kroatisch",
+  serbien: "Serbisch",
+  "bosnien und herzegowina": "Bosnisch",
+  griechenland: "Griechisch",
+  türkei: "Türkisch",
+  ukraine: "Ukrainisch",
+  syrien: "Syrisch",
+  irak: "Irakisch",
+  afghanistan: "Afghanisch",
+  iran: "Iranisch",
+  usa: "Amerikanisch",
+  "vereinigte staaten": "Amerikanisch",
+  "vereinigtes königreich": "Britisch"
+};
+
+function nationalityFromCountry(country) {
+  const k = String(country || "").trim().toLowerCase();
+  if (!k) return "";
+  return COUNTRY_TO_NATIONALITY[k] || String(country || "").trim();
+}
 
 /** Reception-focused contact fields */
 const keyInputClass =
@@ -91,6 +158,16 @@ export default function RegisterClient({ branchSlug, branchName }) {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
+  function setCountryAndAutoNationality(countryValue) {
+    setForm((f) => {
+      const next = { ...f, country: countryValue };
+      if (!String(f.nationality || "").trim()) {
+        next.nationality = nationalityFromCountry(countryValue);
+      }
+      return next;
+    });
+  }
+
   async function onSubmit(e) {
     e.preventDefault();
     setErr("");
@@ -115,6 +192,7 @@ export default function RegisterClient({ branchSlug, branchName }) {
           first_name: form.first_name,
           last_name: form.last_name,
           birth_date: form.birth_date,
+          nationality: form.nationality || undefined,
           country: form.country || undefined,
           street: form.street || undefined,
           postcode: form.postcode || undefined,
@@ -157,6 +235,17 @@ export default function RegisterClient({ branchSlug, branchName }) {
           </p>
           <p className="mt-6 text-[11px] font-bold uppercase tracking-wider text-white/80">Ihre Anmeldenummer</p>
           <p className="mt-2 text-4xl font-black tabular-nums tracking-tight text-white sm:text-5xl">#{registrationNumber}</p>
+          <p className="mt-5 text-sm leading-relaxed text-white/95">
+            Wenn Sie möchten, können Sie jetzt direkt Frühstück für morgen bestellen.
+          </p>
+          <div className="mt-4">
+            <Link
+              href={`/b/${branchSlug}/order`}
+              className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-white px-4 py-2.5 text-sm font-bold text-amber-900 shadow-md"
+            >
+              Frühstück für morgen bestellen
+            </Link>
+          </div>
         </div>
         <div className="fb-card text-center">
           <p className="text-sm leading-relaxed text-slate-600">
@@ -338,16 +427,33 @@ export default function RegisterClient({ branchSlug, branchName }) {
 
       <FormSection title="Weitere Angaben" hint="Optional — Land, Hinweise; weitere Felder bei Bedarf.">
         <div>
+          <label className="fb-label" htmlFor="reg-nationality">
+            Staatsangehörigkeit
+          </label>
+          <input
+            id="reg-nationality"
+            className={keyInputClass}
+            value={form.nationality}
+            onChange={(e) => setField("nationality", e.target.value)}
+          />
+        </div>
+        <div>
           <label className="fb-label" htmlFor="reg-country">
             Land
           </label>
-          <input
+          <select
             id="reg-country"
             className="fb-input"
-            autoComplete="country-name"
             value={form.country}
-            onChange={(e) => setField("country", e.target.value)}
-          />
+            onChange={(e) => setCountryAndAutoNationality(e.target.value)}
+          >
+            <option value="">Bitte wählen…</option>
+            {COUNTRY_OPTIONS.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="fb-label" htmlFor="reg-notes">

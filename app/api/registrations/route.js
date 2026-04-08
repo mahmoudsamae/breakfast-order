@@ -23,6 +23,16 @@ function parsePosInt(v, min, max, fallback) {
   return n;
 }
 
+function composeNotesWithNationality(notes, nationality) {
+  const nat = trimOrNull(nationality, 100);
+  const base = trimOrNull(notes, 4000);
+  if (!nat) return base;
+  const marker = `[NATIONALITY] ${nat}`;
+  if (!base) return marker;
+  if (base.includes("[NATIONALITY]")) return base;
+  return `${marker}\n${base}`;
+}
+
 /** Public: create intake + analytics for an active branch. */
 export async function POST(req) {
   try {
@@ -49,6 +59,7 @@ export async function POST(req) {
       return NextResponse.json({ error: "Geburtsdatum ist erforderlich (JJJJ-MM-TT)." }, { status: 400 });
     }
     const country = trimOrNull(body.country, 100);
+    const nationality = trimOrNull(body.nationality, 100);
     const street = trimOrNull(body.street, 500);
     const postcode = trimOrNull(body.postcode, 32);
     const city = trimOrNull(body.city, 200);
@@ -58,7 +69,7 @@ export async function POST(req) {
     const license_plate = trimOrNull(body.license_plate, 32);
     const payment_method = trimOrNull(body.payment_method, 64);
     const notesRaw = body.notes != null ? String(body.notes) : "";
-    const notes = trimOrNull(notesRaw, 4000);
+    const notes = composeNotesWithNationality(notesRaw, nationality);
 
     const adults_count = parsePosInt(body.adults_count, 0, 500, 0);
     const children_count = parsePosInt(body.children_count, 0, 500, 0);

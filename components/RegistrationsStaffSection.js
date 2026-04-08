@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import RegistrationPrintTemplate from "@/components/registration/RegistrationPrintTemplate";
 
 function formatDeDate(ymd) {
   if (!ymd || typeof ymd !== "string") return "—";
@@ -72,6 +73,39 @@ function FieldRow({ label, value, copyText }) {
   );
 }
 
+function extractNationality(r) {
+  const direct = String(r?.nationality || "").trim();
+  if (direct) return direct;
+  const notes = String(r?.notes || "");
+  const m = notes.match(/\[NATIONALITY\]\s*(.+)/i);
+  if (m?.[1]) return String(m[1]).trim();
+  return String(r?.country || "").trim();
+}
+
+function isSignatureRequired(nationalityRaw) {
+  const value = String(nationalityRaw || "")
+    .trim()
+    .toLowerCase();
+  if (!value) return false;
+  const germanSet = new Set(["de", "deutsch", "deutschland", "german", "germany"]);
+  return !germanSet.has(value);
+}
+
+function PrintBtn({ r, className = "", onPrint }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        if (onPrint) onPrint(r);
+      }}
+      className={className}
+    >
+      Formular drucken
+    </button>
+  );
+}
+
 /** Reception clipboard: name, contact, plate, guest counts only — no dates, birth, address. */
 function receptionDeskText(r) {
   const name = [r.first_name, r.last_name].filter(Boolean).join(" ").trim();
@@ -84,7 +118,7 @@ function receptionDeskText(r) {
   ].join("\n");
 }
 
-function IntakeDetailModal({ r, onClose, onPurge, busyId }) {
+function IntakeDetailModal({ r, onClose, onPurge, onPrint, busyId }) {
   if (!r) return null;
 
   const deskText = receptionDeskText(r);
@@ -92,6 +126,7 @@ function IntakeDetailModal({ r, onClose, onPurge, busyId }) {
   const guestLine = `E ${r.adults_count} · K ${r.children_count} · Kl ${r.infants_count} · Hunde ${r.dogs_count}${
     r.other_pets_count > 0 ? ` · sonst. Tiere ${r.other_pets_count}` : ""
   }`;
+  const nationality = extractNationality(r);
 
   const fullLines = [
     `Anmeldenummer: ${r.registration_number}`,
@@ -147,50 +182,45 @@ function IntakeDetailModal({ r, onClose, onPurge, busyId }) {
           </button>
         </div>
 
-        <div className="mt-5 rounded-2xl border-2 border-slate-200/90 bg-slate-50/95 p-4 shadow-sm">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-600">Aufenthalt</p>
-          <p className="mt-2 text-lg font-bold leading-snug text-slate-900">{periodLine}</p>
-          <div className="mt-4 space-y-0">
-            <FieldRow label="Anreise" value={formatDeDate(r.arrival_date)} copyText={r.arrival_date} />
-            <FieldRow label="Abreise" value={formatDeDate(r.departure_date)} copyText={r.departure_date} />
-          </div>
-          <div className="mt-2 border-t border-slate-200/80 pt-2">
-            <FieldRow label="Gäste" value={guestLine} copyText={guestLine} />
-          </div>
-        </div>
-
-        <div className="mt-5 space-y-0">
-          <p className="mb-3 text-[11px] font-bold uppercase tracking-wider text-slate-500">Person</p>
-          <FieldRow label="Vorname" value={r.first_name} />
-          <FieldRow label="Nachname" value={r.last_name} />
-          <FieldRow label="Geburtsdatum" value={r.birth_date ? formatDeDate(r.birth_date) : "—"} copyText={r.birth_date || ""} />
-        </div>
-
-        <div className="mt-5 space-y-0 border-t border-slate-100 pt-4">
-          <p className="mb-3 text-[11px] font-bold uppercase tracking-wider text-slate-500">Kontakt</p>
-          <FieldRow label="E-Mail" value={r.email} />
-          <FieldRow label="Telefon" value={r.phone} />
-          <FieldRow label="Kennzeichen" value={r.license_plate} />
-        </div>
-
-        <div className="mt-5 space-y-0 border-t border-slate-100 pt-4">
-          <p className="mb-3 text-[11px] font-bold uppercase tracking-wider text-slate-500">Weitere Angaben</p>
-          <FieldRow label="Land" value={r.country} />
-          <FieldRow label="Straße" value={r.street} />
-          <FieldRow label="PLZ" value={r.postcode} />
-          <FieldRow label="Ort" value={r.city} />
-          <FieldRow label="Ausweis / Dokument" value={r.id_number} />
-          <FieldRow label="Sonstige Tiere" value={r.other_pets_count} copyText={String(r.other_pets_count)} />
-          <FieldRow label="Zahlungsart" value={r.payment_method} />
-          <div className="border-b border-slate-100 pb-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <p className="fb-label">Hinweise</p>
-                <p className="whitespace-pre-wrap break-words text-sm text-slate-800">{r.notes || "—"}</p>
-              </div>
-              {r.notes ? <CopyBtn label="Kopieren" text={r.notes} /> : null}
-            </div>
-          </div>
+        <div className="mt-5 space-y-4">
+          <section className="rounded-xl border border-slate-200 p-3">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Aufenthalt</p>
+            <p className="mt-1 text-sm font-semibold text-slate-900">{periodLine}</p>
+          </section>
+          <section className="rounded-xl border border-slate-200 p-3 space-y-0">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">Person</p>
+            <FieldRow label="Vorname" value={r.first_name} copyText={r.first_name || ""} />
+            <FieldRow label="Nachname" value={r.last_name} copyText={r.last_name || ""} />
+            <FieldRow label="Geburtsdatum" value={r.birth_date ? formatDeDate(r.birth_date) : "—"} />
+            <FieldRow label="Staatsangehörigkeit" value={nationality} copyText={nationality} />
+          </section>
+          <section className="rounded-xl border border-slate-200 p-3 space-y-0">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">Kontakt</p>
+            <FieldRow label="E-Mail" value={r.email} copyText={r.email || ""} />
+            <FieldRow label="Telefon" value={r.phone} copyText={r.phone || ""} />
+          </section>
+          <section className="rounded-xl border border-slate-200 p-3 space-y-0">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">Adresse</p>
+            <FieldRow label="Straße" value={r.street} copyText={r.street || ""} />
+            <FieldRow label="PLZ" value={r.postcode} copyText={r.postcode || ""} />
+            <FieldRow label="Ort" value={r.city} copyText={r.city || ""} />
+            <FieldRow label="Land" value={r.country} copyText={r.country || ""} />
+          </section>
+          <section className="rounded-xl border border-slate-200 p-3 space-y-0">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">Fahrzeug / Ausweis</p>
+            <FieldRow label="Kfz-Kennzeichen" value={r.license_plate} copyText={r.license_plate || ""} />
+            <FieldRow label="Ausweisnummer" value={r.id_number} copyText={r.id_number || ""} />
+          </section>
+          <section className="rounded-xl border border-slate-200 p-3 space-y-0">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">Gäste / Haustiere</p>
+            <FieldRow label="Gäste" value={guestLine} />
+            <FieldRow label="Sonstige Haustiere" value={r.other_pets_count} />
+          </section>
+          <section className="rounded-xl border border-slate-200 p-3 space-y-0">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">Zahlung / Status</p>
+            <FieldRow label="Zahlungsart" value={r.payment_method} />
+            <FieldRow label="Eingang" value={new Date(r.created_at).toLocaleString("de-DE")} />
+          </section>
         </div>
 
         <div className="mt-5 rounded-2xl border-2 border-amber-200/90 bg-amber-50/90 p-4 shadow-sm ring-1 ring-amber-100">
@@ -208,6 +238,7 @@ function IntakeDetailModal({ r, onClose, onPurge, busyId }) {
         </div>
 
         <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+          <PrintBtn r={r} onPrint={onPrint} className="fb-btn-secondary flex-1 border-slate-300 bg-white font-semibold text-slate-900" />
           <button type="button" className="fb-btn-primary flex-1" onClick={() => copyToClipboard(fullText)}>
             Vollständig kopieren
           </button>
@@ -317,6 +348,12 @@ export default function RegistrationsStaffSection({ apiPrefix }) {
   const [searchNum, setSearchNum] = useState("");
   const [arrivalFilter, setArrivalFilter] = useState("");
   const [detail, setDetail] = useState(null);
+  const [printRow, setPrintRow] = useState(null);
+
+  function printRegistrationForm(row) {
+    setPrintRow(row);
+    setTimeout(() => window.print(), 40);
+  }
 
   const load = useCallback(async () => {
     setErr("");
@@ -338,6 +375,13 @@ export default function RegistrationsStaffSection({ apiPrefix }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!printRow) return;
+    const done = () => setPrintRow(null);
+    window.addEventListener("afterprint", done);
+    return () => window.removeEventListener("afterprint", done);
+  }, [printRow]);
 
   const { filteredPending, filteredCompleted } = useMemo(() => {
     const num = searchNum.trim();
@@ -434,13 +478,24 @@ export default function RegistrationsStaffSection({ apiPrefix }) {
           <ul className="mt-2 space-y-2">
             {filteredPending.map((r) => (
               <li key={r.id}>
-                <div className="flex w-full flex-wrap items-start justify-between gap-2 rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-3 text-left sm:px-4">
+                <div
+                  className={`flex w-full flex-wrap items-start justify-between gap-2 rounded-2xl border bg-slate-50/80 px-3 py-3 text-left sm:px-4 ${
+                    isSignatureRequired(r.country)
+                      ? "border-red-300 ring-1 ring-red-200"
+                      : "border-slate-100"
+                  }`}
+                >
                   <button
                     type="button"
                     className="min-w-0 flex-1 text-left"
                     onClick={() => setDetail({ kind: "intake", row: r })}
                   >
                     <p className="text-lg font-black tabular-nums text-amber-950">#{r.registration_number ?? "—"}</p>
+                    {isSignatureRequired(extractNationality(r)) ? (
+                      <span className="mt-1 inline-flex rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-800">
+                        Unterschrift erforderlich
+                      </span>
+                    ) : null}
                     <p className="font-semibold text-slate-900">
                       {[r.first_name, r.last_name].filter(Boolean).join(" ") || "—"}
                     </p>
@@ -460,6 +515,9 @@ export default function RegistrationsStaffSection({ apiPrefix }) {
                   >
                     {busyId === r.id ? "…" : "Erledigt & löschen"}
                   </button>
+                  {isSignatureRequired(extractNationality(r)) ? (
+                    <PrintBtn r={r} onPrint={printRegistrationForm} className="shrink-0 rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-800 hover:bg-slate-200" />
+                  ) : null}
                 </div>
               </li>
             ))}
@@ -497,6 +555,7 @@ export default function RegistrationsStaffSection({ apiPrefix }) {
         <IntakeDetailModal
           r={detail.row}
           onClose={() => setDetail(null)}
+          onPrint={printRegistrationForm}
           onPurge={async (id) => {
             try {
               await purgeIntake(id);
@@ -511,6 +570,7 @@ export default function RegistrationsStaffSection({ apiPrefix }) {
       {detail?.kind === "analytics" ? (
         <AnalyticsDetailModal r={detail.row} onClose={() => setDetail(null)} />
       ) : null}
+      {printRow ? <RegistrationPrintTemplate registration={printRow} /> : null}
     </section>
   );
 }
