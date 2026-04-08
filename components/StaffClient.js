@@ -6,8 +6,6 @@ import { menuCompositionLinesFromDescription } from "@/lib/staff-menu-display";
 import { formatMoney } from "@/lib/format-money";
 import RegistrationsStaffSection from "@/components/RegistrationsStaffSection";
 
-const FIXED_PACKLIST_PRODUCTS = ["Knusperbrötchen", "Farmerbrötchen", "Laugenbrezel", "Buttercroissant"];
-
 function statusLabel(s) {
   if (s === "pending") return "Ausstehend";
   if (s === "delivered") return "Ausgeliefert";
@@ -108,6 +106,14 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
     [preparationSummary.products]
   );
   /** Full-day packlist for matrix: pending + delivered + not_picked_up (non-drinks columns). */
+  const manualTotal = useMemo(() => {
+    let sum = 0;
+    for (const p of catalog.products || []) {
+      const qty = Number(manualProductQty[String(p.id)] || 0);
+      if (qty > 0) sum += qty * Number(p.price || 0);
+    }
+    return Math.round(sum * 100) / 100;
+  }, [catalog, manualProductQty]);
   const matrixProductsPrimary = useMemo(
     () => (dayMatrixPacklist || []).filter((x) => x.category !== "getraenke"),
     [dayMatrixPacklist]
@@ -117,24 +123,6 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
     for (const p of matrixProductsPrimary) for (const x of p.per_order || []) s.add(Number(x.order_number));
     return [...s].sort((a, b) => a - b);
   }, [matrixProductsPrimary]);
-  const manualTotal = useMemo(() => {
-    let sum = 0;
-    for (const p of catalog.products || []) {
-      const qty = Number(manualProductQty[String(p.id)] || 0);
-      if (qty > 0) sum += qty * Number(p.price || 0);
-    }
-    return Math.round(sum * 100) / 100;
-  }, [catalog, manualProductQty]);
-  const fixedPacklistRows = useMemo(() => {
-    const qtyByName = new Map();
-    for (const row of prepProductsPrimary) {
-      qtyByName.set(String(row.name || "").trim().toLowerCase(), Number(row.qty || 0));
-    }
-    return FIXED_PACKLIST_PRODUCTS.map((name) => ({
-      name,
-      qty: qtyByName.get(name.toLowerCase()) || 0
-    }));
-  }, [prepProductsPrimary]);
 
   function todayIsoLocal() {
     return new Date().toLocaleDateString("en-CA");
@@ -627,8 +615,7 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50/80 to-white p-3 shadow-sm sm:p-4">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">Packliste-Matrix</h3>
+              <div className="mb-3 flex items-center justify-end gap-3">
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -646,33 +633,10 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
                   </button>
                 </div>
               </div>
-              <div id="packliste-print-area" className="max-h-[66dvh] overflow-auto rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
-                <div className="packlist-sheet">
-                  <p className="packlist-title">Packliste Fruehstueck</p>
-                  <p className="packlist-date">{pickupDateLabel ? `Datum: ${pickupDateLabel}` : "Datum: -"}</p>
-                  <table className="packlist-main-table">
-                    <thead>
-                      <tr>
-                        <th>Produkt</th>
-                        <th className="qty-col">Menge</th>
-                        <th className="check-col">Check</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {fixedPacklistRows.map((row) => (
-                        <tr key={`fixed-pack-${row.name}`}>
-                          <td>{row.name}</td>
-                          <td className="qty-col">{row.qty}</td>
-                          <td className="check-col"></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="packlist-screen-only mt-4">
-                  <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">Detail pro Bestellnummer</p>
-                  <table className="min-w-full text-xs">
-                  <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur">
+            <p className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-700">Packliste-Matrix</p>
+            <div id="packliste-print-area" className="max-h-[66dvh] overflow-auto rounded-xl border border-slate-200 bg-white">
+              <table className="min-w-full text-xs">
+                <thead className="sticky top-0 z-10 bg-slate-100/95 backdrop-blur">
                   <tr>
                     <th className="sticky left-0 z-20 bg-slate-100/95 px-3 py-2.5 text-left font-bold text-slate-700">Bestellnr.</th>
                     {matrixProductsPrimary.map((p) => (
@@ -710,8 +674,7 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
                     ))
                   )}
                 </tbody>
-                  </table>
-                </div>
+              </table>
               </div>
             </div>
           </div>
@@ -738,53 +701,6 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
             border: none !important;
             border-radius: 0 !important;
             background: #fff !important;
-          }
-          body.print-packliste-only .packlist-screen-only {
-            display: none !important;
-          }
-          body.print-packliste-only .packlist-sheet {
-            padding: 0 !important;
-          }
-          body.print-packliste-only .packlist-title {
-            font-size: 20px !important;
-            font-weight: 800 !important;
-            color: #0f172a !important;
-            margin: 0 0 4mm !important;
-          }
-          body.print-packliste-only .packlist-date {
-            font-size: 13px !important;
-            color: #334155 !important;
-            margin: 0 0 5mm !important;
-          }
-          body.print-packliste-only .packlist-main-table {
-            width: 100% !important;
-            border-collapse: collapse !important;
-            font-size: 13px !important;
-            color: #0f172a !important;
-          }
-          body.print-packliste-only .packlist-main-table th,
-          body.print-packliste-only .packlist-main-table td {
-            border: 1px solid #cbd5e1 !important;
-            padding: 3.5mm 3mm !important;
-            vertical-align: middle !important;
-          }
-          body.print-packliste-only .packlist-main-table th {
-            background: #f8fafc !important;
-            font-size: 12px !important;
-            font-weight: 700 !important;
-            text-transform: uppercase !important;
-            letter-spacing: 0.04em !important;
-          }
-          body.print-packliste-only .packlist-main-table td:first-child {
-            font-weight: 700 !important;
-          }
-          body.print-packliste-only .packlist-main-table .qty-col {
-            width: 22mm !important;
-            text-align: center !important;
-            font-weight: 800 !important;
-          }
-          body.print-packliste-only .packlist-main-table .check-col {
-            width: 28mm !important;
           }
         }
       `}</style>
