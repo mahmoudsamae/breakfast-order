@@ -11,7 +11,7 @@ const RANGE_VALUES = new Set(["today", "yesterday", "last7days", "last30days"]);
 
 /** Minimal nested select; matches admin summary aggregation (product + menu lines). */
 const ORDERS_SELECT =
-  "id,created_at,total_amount,order_items(quantity,unit_price,products(name),menus(name))";
+  "id,created_at,total_amount,order_items(quantity,unit_price,products(name,category),menus(name))";
 
 /**
  * ordersFromRegistration: null — orders do not store registration_number; breakfast_ordered on
@@ -79,6 +79,7 @@ function mapOrdersForAnalytics(orderRows) {
       const unitPrice = Number(i.unit_price || 0);
       const lineRevenue = q * unitPrice;
       const pn = i.products?.name;
+      const pc = i.products?.category || null;
       const mn = i.menus?.name;
       if (pn) {
         productUnits.set(pn, (productUnits.get(pn) || 0) + q);
@@ -97,9 +98,37 @@ function mapOrdersForAnalytics(orderRows) {
       totalAmount,
       totalItems,
       productUnits,
-      productRevenue
+      productRevenue,
+      orderItems: (o.order_items || []).map((i) => ({
+        quantity: Number(i.quantity || 0),
+        unitPrice: Number(i.unit_price || 0),
+        productName: i.products?.name || null,
+        productCategory: i.products?.category || null,
+        menuName: i.menus?.name || null
+      }))
     };
   });
+}
+
+function aggregatePastryProducts(rows) {
+  const units = new Map();
+  const revenue = new Map();
+  for (const o of rows) {
+    for (const i of o.orderItems || []) {
+      if (!i.productName) continue;
+      if (String(i.productCategory || "").toLowerCase() === "getraenke") continue;
+      if (i.quantity <= 0) continue;
+      units.set(i.productName, (units.get(i.productName) || 0) + i.quantity);
+      revenue.set(i.productName, (revenue.get(i.productName) || 0) + i.quantity * i.unitPrice);
+    }
+  }
+  return [...units.entries()]
+    .map(([name, quantitySold]) => ({
+      name,
+      quantitySold,
+      totalRevenue: Math.round((revenue.get(name) || 0) * 100) / 100
+    }))
+    .sort((a, b) => b.quantitySold - a.quantitySold || a.name.localeCompare(b.name, "de"));
 }
 
 function aggregateWindow(rows, startYmd, endYmd) {
@@ -242,8 +271,6 @@ export async function GET(req) {
     const prev7End = berlinDateWithOffset(-7);
     const prev30Start = berlinDateWithOffset(-59);
     const prev30End = berlinDateWithOffset(-30);
-    /** Covers current + previous comparison windows. */
-    const fetchCutoffIso = new Date(Date.now() - 75 * 86400000).toISOString();
 
     const supabase = getSupabaseServerClient();
     const [{ data: orderRows, error: ordersErr }, { data: regRows, error: regErr }] = await Promise.all([
@@ -251,16 +278,12 @@ export async function GET(req) {
       .from("orders")
       .select(ORDERS_SELECT)
       .eq("branch_id", branch.id)
-      .gte("created_at", fetchCutoffIso)
-      .order("created_at", { ascending: true })
-      .limit(20000),
+      .order("created_at", { ascending: true }),
       supabase
         .from("registrations_analytics")
         .select("created_at,breakfast_ordered")
         .eq("branch_id", branch.id)
-        .gte("created_at", fetchCutoffIso)
         .order("created_at", { ascending: true })
-        .limit(20000)
     ]);
 
     if (ordersErr || regErr) {
@@ -268,6 +291,10 @@ export async function GET(req) {
     }
 
     const rows = mapOrdersForAnalytics(orderRows || []);
+    const allTimeAgg = aggregateWindow(rows, "0000-01-01", "9999-12-31");
+    const pastryAllTime = aggregatePastryProducts(rows);
+    const topProductsAllTime = pastryAllTime.slice(0, 4);
+    const topSellingProductAllTime = topProductsAllTime[0] || null;
     const regs = regRows || [];
     const selectedAgg = aggregateWindow(rows, window.startYmd, window.endYmd);
     const todayAgg = aggregateWindow(rows, today, today);
@@ -368,6 +395,11 @@ export async function GET(req) {
         unpaidCheckouts: null,
         departuresTomorrowUnpaid: null,
         summary: {
+          totalOrdersAllTime: allTimeAgg.ordersCount,
+          totalRevenueAllTime: allTimeAgg.revenue,
+          ordersToday: todayAgg.ordersCount,
+          ordersBetween18And21: allTimeAgg.orders18to21,
+          revenueToday: todayAgg.revenue,
           orders: selectedAgg.ordersCount,
           itemsSold: selectedAgg.itemsSold,
           revenue: selectedAgg.revenue,
@@ -384,6 +416,9 @@ export async function GET(req) {
           busiestDay: selectedAgg.peakDay
         },
         products: {
+          topSellingProductAllTime,
+          topProductsAllTime,
+          ordersByPastryType: pastryAllTime.map((x) => ({ name: x.name, quantitySold: x.quantitySold })),
           topProducts: selectedAgg.topProducts,
           productsBreakdown: selectedAgg.productsBreakdown,
           topProductsLast7Days: last7Agg.topProducts,
