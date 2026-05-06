@@ -4,6 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { parseEigenesMenueFromCustomerName } from "@/lib/eigenes-menue";
 import { menuCompositionLinesFromDescription } from "@/lib/staff-menu-display";
 import { formatMoney } from "@/lib/format-money";
+import {
+  DEFAULT_NOT_PICKED_UP_REASON,
+  NOT_PICKED_UP_REASON_OPTIONS
+} from "@/lib/not-picked-up-reasons";
 import RegistrationsStaffSection from "@/components/RegistrationsStaffSection";
 
 function statusLabel(s) {
@@ -38,6 +42,8 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
   const [detailId, setDetailId] = useState(null);
   const [drinksOpen, setDrinksOpen] = useState(false);
   const [confirmNotPickedUpId, setConfirmNotPickedUpId] = useState(null);
+  const [notPickedUpReason, setNotPickedUpReason] = useState(DEFAULT_NOT_PICKED_UP_REASON);
+  const [notPickedUpNote, setNotPickedUpNote] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
   const [manualSubmitting, setManualSubmitting] = useState(false);
   const [manualCustomerName, setManualCustomerName] = useState("");
@@ -81,7 +87,14 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
   }
 
   async function markNotPickedUp(id) {
-    const res = await fetch(`${apiPrefix}/orders/${id}/not-picked-up`, { method: "PATCH" });
+    const res = await fetch(`${apiPrefix}/orders/${id}/not-picked-up`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        reason: notPickedUpReason || DEFAULT_NOT_PICKED_UP_REASON,
+        note: notPickedUpNote
+      })
+    });
     if (!res.ok) {
       const data = await res.json();
       setErr(data.error || "Status konnte nicht gesetzt werden.");
@@ -89,13 +102,19 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
     }
     setDetailId(null);
     setConfirmNotPickedUpId(null);
+    setNotPickedUpReason(DEFAULT_NOT_PICKED_UP_REASON);
+    setNotPickedUpNote("");
     await load();
   }
 
   useEffect(() => {
     if (!confirmNotPickedUpId) return;
     function onKeyDown(e) {
-      if (e.key === "Escape") setConfirmNotPickedUpId(null);
+      if (e.key === "Escape") {
+        setConfirmNotPickedUpId(null);
+        setNotPickedUpReason(DEFAULT_NOT_PICKED_UP_REASON);
+        setNotPickedUpNote("");
+      }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -526,6 +545,16 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
               <p className="mt-1 text-sm text-slate-500">
                 Status: <span className="font-semibold text-slate-800">{statusLabel(detailOrder.status)}</span>
               </p>
+              {detailOrder.status === "not_picked_up" && detailOrder.not_picked_up_reason ? (
+                <p className="mt-1 text-xs text-slate-500">
+                  Grund:{" "}
+                  <span className="font-semibold text-slate-700">
+                    {NOT_PICKED_UP_REASON_OPTIONS.find((x) => x.value === detailOrder.not_picked_up_reason)?.label ||
+                      detailOrder.not_picked_up_reason}
+                  </span>
+                  {detailOrder.not_picked_up_note ? ` · ${detailOrder.not_picked_up_note}` : ""}
+                </p>
+              ) : null}
             </div>
 
             <div className="space-y-3 px-4 py-4 sm:px-5">
@@ -639,7 +668,11 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setConfirmNotPickedUpId(detailOrder.id)}
+                  onClick={() => {
+                    setNotPickedUpReason(DEFAULT_NOT_PICKED_UP_REASON);
+                    setNotPickedUpNote("");
+                    setConfirmNotPickedUpId(detailOrder.id);
+                  }}
                   className="min-h-12 w-full rounded-2xl bg-slate-700 py-3.5 text-sm font-bold text-white shadow-md hover:bg-slate-800 active:bg-slate-900"
                 >
                   Nicht abgeholt
@@ -748,7 +781,7 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
             margin: 0 !important;
             padding: 0 !important;
             background: white !important;
-            overflow: hidden !important;
+            overflow: visible !important;
             height: auto !important;
             max-height: none !important;
           }
@@ -763,12 +796,12 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
             visibility: visible !important;
           }
           html.print-packliste-only body #packliste-print-area[data-packliste-print-active="true"] {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
+            position: static !important;
             width: 100% !important;
             max-width: 100% !important;
             overflow: visible !important;
+            max-height: none !important;
+            height: auto !important;
             margin: 0 !important;
             padding: 0 !important;
             border: none !important;
@@ -857,7 +890,11 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
       {confirmNotPickedUpId ? (
         <div
           className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/55 p-4"
-          onClick={() => setConfirmNotPickedUpId(null)}
+          onClick={() => {
+            setConfirmNotPickedUpId(null);
+            setNotPickedUpReason(DEFAULT_NOT_PICKED_UP_REASON);
+            setNotPickedUpNote("");
+          }}
           role="presentation"
         >
           <div
@@ -868,15 +905,52 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
             aria-labelledby="confirm-no-show-title"
           >
             <h3 id="confirm-no-show-title" className="text-lg font-bold text-slate-900">
-              Bestellung bestätigen
+              Nicht abgeholt erfassen
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-slate-700">
-              Möchten Sie diese Bestellung wirklich als 'nicht abgeholt' markieren?
+              Bitte Grund auswählen. Optional können Sie eine kurze Notiz ergänzen.
             </p>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label htmlFor="not-picked-up-reason" className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                  Grund
+                </label>
+                <select
+                  id="not-picked-up-reason"
+                  className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900"
+                  value={notPickedUpReason}
+                  onChange={(e) => setNotPickedUpReason(e.target.value)}
+                >
+                  {NOT_PICKED_UP_REASON_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="not-picked-up-note" className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                  Notiz (optional)
+                </label>
+                <textarea
+                  id="not-picked-up-note"
+                  rows={3}
+                  maxLength={2000}
+                  className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                  value={notPickedUpNote}
+                  onChange={(e) => setNotPickedUpNote(e.target.value)}
+                  placeholder="z. B. Doppelbestellung mit Nummer #123 storniert"
+                />
+              </div>
+            </div>
             <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
-                onClick={() => setConfirmNotPickedUpId(null)}
+                onClick={() => {
+                  setConfirmNotPickedUpId(null);
+                  setNotPickedUpReason(DEFAULT_NOT_PICKED_UP_REASON);
+                  setNotPickedUpNote("");
+                }}
                 className="min-h-11 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:min-h-0 sm:py-2"
               >
                 Abbrechen

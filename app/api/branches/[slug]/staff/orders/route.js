@@ -37,7 +37,7 @@ export async function GET(req, { params }) {
       .order("name", { ascending: true }),
     supabase
       .from("menus")
-      .select("id,name,price,is_active")
+      .select("id,name,price,image_url,is_active")
       .eq("branch_id", branchId)
       .eq("is_active", true)
       .is("archived_at", null)

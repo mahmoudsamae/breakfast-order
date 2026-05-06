@@ -45,10 +45,22 @@ function normalizeImageSrc(src) {
   // Keep absolute http(s) URLs as-is.
   if (/^https?:\/\//i.test(v)) return v;
 
+  const base = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  const bucket = (process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || "breakfast-images").trim();
+
   // Support relative Supabase public storage paths saved in DB.
   if (v.startsWith("/")) {
-    const base = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim().replace(/\/+$/, "");
     if (base) return `${base}${v}`;
+  }
+
+  // Some imports store paths without a leading slash.
+  if (base && v.startsWith("storage/")) return `${base}/${v}`;
+  if (base && v.startsWith("v1/object/public/")) return `${base}/storage/${v}`;
+  if (base && v.startsWith("object/public/")) return `${base}/storage/v1/${v}`;
+
+  // Raw object keys like "products/abc.jpg" -> build public URL.
+  if (base && bucket && !v.includes("://") && v.includes("/")) {
+    return `${base}/storage/v1/object/public/${bucket}/${v.replace(/^\/+/, "")}`;
   }
 
   return v;
