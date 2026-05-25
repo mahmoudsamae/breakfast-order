@@ -49,11 +49,34 @@ export async function GET(_, { params }) {
   const prevWeekMonday = addBerlinDays(weekMonday, -7);
   const prevWeekSunday = addBerlinDays(weekMonday, -1);
 
-  const { data: allOrders, error: ordersErr } = await supabase
+  const ordersSelectWithReasons =
+    "id,order_number,customer_name,created_at,total_amount,status,delivered_at,pickup_date,not_picked_up_reason,not_picked_up_note";
+  const ordersSelectFallback = "id,order_number,customer_name,created_at,total_amount,status,delivered_at,pickup_date";
+  let { data: allOrders, error: ordersErr } = await supabase
     .from("orders")
-    .select("id,created_at,total_amount,status,delivered_at,pickup_date")
+    .select(ordersSelectWithReasons)
     .eq("branch_id", branchId)
     .order("created_at", { ascending: true });
+
+  const missingReasonCols =
+    ordersErr &&
+    (ordersErr.code === "42703" ||
+      String(ordersErr.message || "").includes("not_picked_up_reason") ||
+      String(ordersErr.message || "").includes("not_picked_up_note"));
+
+  if (missingReasonCols) {
+    const fallbackRes = await supabase
+      .from("orders")
+      .select(ordersSelectFallback)
+      .eq("branch_id", branchId)
+      .order("created_at", { ascending: true });
+    allOrders = (fallbackRes.data || []).map((o) => ({
+      ...o,
+      not_picked_up_reason: null,
+      not_picked_up_note: ""
+    }));
+    ordersErr = fallbackRes.error;
+  }
 
   if (ordersErr) return NextResponse.json({ error: ordersErr.message }, { status: 500 });
 
@@ -93,6 +116,17 @@ export async function GET(_, { params }) {
   const totalRevenue = deliveredOrders.reduce((a, o) => a + Number(o.total_amount || 0), 0);
   const notPickedUpTotal = notPickedUpOrders.length;
   const totalArticlesSold = items.reduce((a, i) => a + Number(i.quantity || 0), 0);
+  const notPickedUpDetails = [...notPickedUpOrders]
+    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+    .map((o) => ({
+      id: o.id,
+      orderNumber: o.order_number ?? null,
+      customerName: o.customer_name || "",
+      createdAt: o.created_at || null,
+      pickupDate: o.pickup_date || null,
+      reason: o.not_picked_up_reason || null,
+      note: o.not_picked_up_note || ""
+    }));
 
   const inThisCalendarWeek = (o) => {
     const cd = berlinDateFromIso(o.created_at);
@@ -190,6 +224,7 @@ export async function GET(_, { params }) {
     totalOrders,
     totalRevenue,
     notPickedUpTotal,
+    notPickedUpDetails,
     totalArticlesSold,
     ordersThisWeek,
     revenueThisWeek,

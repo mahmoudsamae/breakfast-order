@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { CardImageMedia, CardImageMediaPreview } from "@/components/CardImageMedia";
 import { formatMoney } from "@/lib/format-money";
+import { NOT_PICKED_UP_REASON_OPTIONS } from "@/lib/not-picked-up-reasons";
 import {
   normalizeProductCategorySlug,
   productCategoryLabelDe,
@@ -37,12 +38,95 @@ function Hero({ title, subtitle, actions = null }) {
   );
 }
 
-function Kpi({ label, value, hint }) {
+function Kpi({ label, value, hint, action = null }) {
   return (
-    <div className="rounded-2xl border border-white/20 bg-white/95 p-4 shadow-md ring-1 ring-slate-200/60">
+    <div className="relative rounded-2xl border border-white/20 bg-white/95 p-4 shadow-md ring-1 ring-slate-200/60">
+      {action ? <div className="absolute right-3 top-3">{action}</div> : null}
       <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
       <p className="mt-1 text-2xl font-black text-slate-900">{value}</p>
       {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
+    </div>
+  );
+}
+
+function formatDateTimeDe(iso) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString("de-DE", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  } catch {
+    return String(iso);
+  }
+}
+
+function notPickedUpReasonLabel(reason) {
+  if (!reason) return "Kein Grund gespeichert";
+  return NOT_PICKED_UP_REASON_OPTIONS.find((x) => x.value === reason)?.label || reason;
+}
+
+function NotPickedUpDetailsModal({ rows, onClose }) {
+  if (!rows) return null;
+  return (
+    <div className="fixed inset-0 z-[95] flex items-end justify-center bg-slate-950/55 p-0 sm:items-center sm:p-4" onClick={onClose}>
+      <div
+        className="max-h-[88dvh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl sm:p-6"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="not-picked-up-details-title"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Nicht abgeholt</p>
+            <h3 id="not-picked-up-details-title" className="mt-1 text-lg font-bold text-slate-900">
+              Gründe anzeigen
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700"
+          >
+            Schließen
+          </button>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {rows.length === 0 ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">Keine Einträge vorhanden.</div>
+          ) : (
+            rows.map((row) => (
+              <div key={row.id} className="rounded-2xl border border-slate-200/90 bg-white px-4 py-3 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">
+                      Bestellung {row.orderNumber != null ? `#${row.orderNumber}` : "—"}
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {row.customerName ? `${row.customerName} · ` : ""}
+                      Abholung: {row.pickupDate || "—"} · Bestellt: {formatDateTimeDe(row.createdAt)}
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-3 text-sm">
+                  <span className="font-semibold text-slate-700">Grund:</span>{" "}
+                  <span className="font-bold text-slate-900">{notPickedUpReasonLabel(row.reason)}</span>
+                </p>
+                {row.note ? (
+                  <p className="mt-1 text-sm text-slate-700">
+                    <span className="font-semibold text-slate-700">Notiz:</span> {row.note}
+                  </p>
+                ) : null}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -54,6 +138,7 @@ export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = ""
   const [menus, setMenus] = useState([]);
   const [err, setErr] = useState("");
   const [exportingAll, setExportingAll] = useState(false);
+  const [notPickedUpOpen, setNotPickedUpOpen] = useState(false);
 
   const loadAll = useCallback(async () => {
     setErr("");
@@ -311,7 +396,22 @@ export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = ""
               <Kpi label="Alle Bestellungen" value={summary.totalOrders} />
               <Kpi label="Gesamtumsatz" value={formatMoney(summary.totalRevenue)} />
               <Kpi label="Verkaufte Artikel (Stück)" value={summary.totalArticlesSold} />
-              <Kpi label="Nicht abgeholt gesamt" value={summary.notPickedUpTotal || 0} />
+              <Kpi
+                label="Nicht abgeholt gesamt"
+                value={summary.notPickedUpTotal || 0}
+                action={
+                  <button
+                    type="button"
+                    onClick={() => setNotPickedUpOpen(true)}
+                    disabled={!summary.notPickedUpDetails?.length}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-xs font-black text-slate-600 shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
+                    aria-label="Nicht abgeholt Gründe anzeigen"
+                    title="Gründe anzeigen"
+                  >
+                    i
+                  </button>
+                }
+              />
             </div>
           </section>
 
@@ -435,6 +535,7 @@ export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = ""
           Übersicht wird geladen…
         </div>
       ) : null}
+      {notPickedUpOpen ? <NotPickedUpDetailsModal rows={summary?.notPickedUpDetails || []} onClose={() => setNotPickedUpOpen(false)} /> : null}
 
       {tab === "products" ? (
         <ProductsTab

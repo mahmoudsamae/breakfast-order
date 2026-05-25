@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node --use-system-ca ./node_modules/next/dist/bin/next dev",
+    "dev:plain": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"

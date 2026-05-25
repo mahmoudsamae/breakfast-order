@@ -44,10 +44,31 @@ export async function GET() {
   const prevWeekMonday = addBerlinDays(weekMonday, -7);
   const prevWeekSunday = addBerlinDays(weekMonday, -1);
 
-  const [{ data: allOrders, error: ordersErr }, { data: allItems, error: itemsErr }] = await Promise.all([
-    supabase.from("orders").select("id,created_at,total_amount,status,delivered_at,pickup_date").order("created_at", { ascending: true }),
-    supabase.from("order_items").select("order_id,quantity,unit_price,product_id,menu_id,products(name),menus(name)")
-  ]);
+  const itemsPromise = supabase.from("order_items").select("order_id,quantity,unit_price,product_id,menu_id,products(name),menus(name)");
+  const ordersSelectWithReasons =
+    "id,order_number,customer_name,created_at,total_amount,status,delivered_at,pickup_date,not_picked_up_reason,not_picked_up_note";
+  const ordersSelectFallback = "id,order_number,customer_name,created_at,total_amount,status,delivered_at,pickup_date";
+  let { data: allOrders, error: ordersErr } = await supabase
+    .from("orders")
+    .select(ordersSelectWithReasons)
+    .order("created_at", { ascending: true });
+  const { data: allItems, error: itemsErr } = await itemsPromise;
+
+  const missingReasonCols =
+    ordersErr &&
+    (ordersErr.code === "42703" ||
+      String(ordersErr.message || "").includes("not_picked_up_reason") ||
+      String(ordersErr.message || "").includes("not_picked_up_note"));
+
+  if (missingReasonCols) {
+    const fallbackRes = await supabase.from("orders").select(ordersSelectFallback).order("created_at", { ascending: true });
+    allOrders = (fallbackRes.data || []).map((o) => ({
+      ...o,
+      not_picked_up_reason: null,
+      not_picked_up_note: ""
+    }));
+    ordersErr = fallbackRes.error;
+  }
 
   if (ordersErr) return NextResponse.json({ error: ordersErr.message }, { status: 500 });
   if (itemsErr) return NextResponse.json({ error: itemsErr.message }, { status: 500 });
@@ -77,6 +98,17 @@ export async function GET() {
   const totalOrders = orders.length;
   const totalRevenue = deliveredOrders.reduce((a, o) => a + Number(o.total_amount || 0), 0);
   const notPickedUpTotal = notPickedUpOrders.length;
+  const notPickedUpDetails = [...notPickedUpOrders]
+    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+    .map((o) => ({
+      id: o.id,
+      orderNumber: o.order_number ?? null,
+      customerName: o.customer_name || "",
+      createdAt: o.created_at || null,
+      pickupDate: o.pickup_date || null,
+      reason: o.not_picked_up_reason || null,
+      note: o.not_picked_up_note || ""
+    }));
   const totalArticlesSold = items.reduce((a, i) => a + Number(i.quantity || 0), 0);
 
   const inThisCalendarWeek = (o) => {
@@ -156,6 +188,7 @@ export async function GET() {
     totalOrders,
     totalRevenue,
     notPickedUpTotal,
+    notPickedUpDetails,
     totalArticlesSold,
     ordersThisWeek,
     revenueThisWeek,

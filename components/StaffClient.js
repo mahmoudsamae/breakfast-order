@@ -683,12 +683,20 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
         </div>
       ) : null}
       {packOpen ? (
-        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/55 p-0 sm:items-center sm:p-4" onClick={() => setPackOpen(false)}>
+        <div
+          data-packliste-print-overlay="true"
+          className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/55 p-0 sm:items-center sm:p-4"
+          onClick={() => setPackOpen(false)}
+        >
           <div
+            data-packliste-print-dialog="true"
             className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-white p-4 shadow-2xl sm:rounded-3xl sm:p-5"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50/80 to-white p-3 shadow-sm sm:p-4">
+            <div
+              data-packliste-print-card="true"
+              className="rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50/80 to-white p-3 shadow-sm sm:p-4"
+            >
               <div className="mb-3 flex items-center justify-end gap-3">
                 <div className="flex items-center gap-2">
                   <button
@@ -788,6 +796,39 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
           html.print-packliste-only body * {
             visibility: hidden !important;
           }
+          html.print-packliste-only body [data-packliste-print-overlay="true"],
+          html.print-packliste-only body [data-packliste-print-dialog="true"],
+          html.print-packliste-only body [data-packliste-print-card="true"] {
+            visibility: visible !important;
+          }
+          html.print-packliste-only body [data-packliste-print-overlay="true"] {
+            position: static !important;
+            inset: auto !important;
+            display: block !important;
+            min-height: 0 !important;
+            height: auto !important;
+            padding: 0 !important;
+            background: #fff !important;
+            overflow: visible !important;
+          }
+          html.print-packliste-only body [data-packliste-print-dialog="true"] {
+            position: static !important;
+            width: auto !important;
+            max-width: none !important;
+            max-height: none !important;
+            overflow: visible !important;
+            padding: 0 !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: transparent !important;
+          }
+          html.print-packliste-only body [data-packliste-print-card="true"] {
+            padding: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: transparent !important;
+          }
           html.print-packliste-only body #packliste-print-area {
             visibility: hidden !important;
           }
@@ -855,6 +896,11 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
             border-collapse: collapse !important;
             font-size: 9.5pt !important;
             line-height: 1.35 !important;
+          }
+          html.print-packliste-only body #packliste-print-area[data-packliste-print-active="true"] .sticky {
+            position: static !important;
+            left: auto !important;
+            top: auto !important;
           }
           html.print-packliste-only body #packliste-print-area[data-packliste-print-active="true"] .packliste-print-matrix-table thead th {
             position: static !important;
