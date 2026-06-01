@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -67,7 +67,7 @@ export default function AppChrome() {
   return (
     <>
       <header className="mb-5 flex items-center justify-between gap-3 sm:mb-6 sm:gap-4">
-        <button type="button" onClick={tapLogo} className="min-h-11 min-w-0 flex-1 text-left text-base font-semibold leading-snug text-amber-950/90 sm:min-h-0 sm:flex-none sm:text-lg">
+        <button type="button" onClick={tapLogo} className="min-h-11 min-w-0 flex-1 text-left text-base font-semibold leading-snug text-brand-orange sm:min-h-0 sm:flex-none sm:text-lg">
           Frühstück bestellen
         </button>
         <nav className="flex shrink-0 gap-2 text-xs font-semibold">
@@ -80,7 +80,7 @@ export default function AppChrome() {
               type="button"
               title="Letzte Bestellung ansehen"
               onClick={() => window.dispatchEvent(new Event("fruehstueck-open-last-order"))}
-              className="min-h-10 shrink-0 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-3 py-2 text-[11px] font-bold text-white shadow-sm ring-1 ring-amber-400/40 transition hover:brightness-105 active:brightness-95 sm:min-h-9 sm:px-3.5 sm:text-xs sm:py-1.5"
+              className="min-h-10 shrink-0 rounded-full bg-brand-teal px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:brightness-95 active:brightness-90 sm:min-h-9 sm:px-3.5 sm:py-1.5"
             >
               Letzte Bestellung
             </button>
@@ -99,7 +99,7 @@ export default function AppChrome() {
                   value={u}
                   onChange={(e) => setU(e.target.value)}
                   autoComplete="username"
-                  className="min-h-12 w-full rounded-xl border border-slate-200 px-3 py-3 text-base text-slate-900 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50 sm:py-2 sm:text-sm"
+                  className="min-h-12 w-full rounded-xl border border-slate-200 px-3 py-3 text-base text-slate-900 outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-yellow/50/50 sm:py-2 sm:text-sm"
                 />
               </div>
               <div>
@@ -109,7 +109,7 @@ export default function AppChrome() {
                   value={p}
                   onChange={(e) => setP(e.target.value)}
                   autoComplete="current-password"
-                  className="min-h-12 w-full rounded-xl border border-slate-200 px-3 py-3 text-base text-slate-900 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50 sm:py-2 sm:text-sm"
+                  className="min-h-12 w-full rounded-xl border border-slate-200 px-3 py-3 text-base text-slate-900 outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-yellow/50/50 sm:py-2 sm:text-sm"
                 />
               </div>
               {err ? <p className="text-sm text-red-600">{err}</p> : null}

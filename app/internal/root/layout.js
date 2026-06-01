@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getRootSessionFromCookies } from "@/lib/root-session";
 import RootLogoutButton from "./RootLogoutButton";
@@ -11,7 +11,7 @@ export default async function InternalRootLayout({ children }) {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <div className="border-b border-amber-400/30 bg-gradient-to-br from-amber-600 via-orange-500 to-rose-600 shadow-md">
+      <div className="border-b border-brand-teal/30 bg-gradient-to-br from-brand-orange via-brand-orange to-rose-600 shadow-md">
         <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3 px-4 py-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/80">System</p>

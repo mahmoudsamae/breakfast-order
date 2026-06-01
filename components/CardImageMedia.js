@@ -4,11 +4,11 @@
  */
 
 const CARD_MEDIA_BASE =
-  "relative h-[140px] shrink-0 overflow-hidden rounded-2xl bg-gradient-to-b from-stone-100 via-amber-50/45 to-orange-50/35 ring-1 ring-stone-200/55 sm:h-[160px]";
+  "relative h-[140px] shrink-0 overflow-hidden rounded-2xl bg-gradient-to-b from-stone-100 via-brand-yellow/25 to-brand-yellow/15 ring-1 ring-stone-200/55 sm:h-[160px]";
 
 /** /order product grid: slightly taller media, same contain + frame. */
 const CARD_MEDIA_ORDER_GRID_BASE =
-  "relative h-[156px] shrink-0 overflow-hidden rounded-2xl bg-gradient-to-b from-stone-100 via-amber-50/45 to-orange-50/35 ring-1 ring-stone-200/55 sm:h-[176px]";
+  "relative h-[156px] shrink-0 overflow-hidden rounded-2xl bg-gradient-to-b from-stone-100 via-brand-yellow/25 to-brand-yellow/15 ring-1 ring-stone-200/55 sm:h-[176px]";
 
 /** List/grid cards: full width, fixed height, overflow hidden, neutral gradient. */
 export const CARD_MEDIA_OUTER = `${CARD_MEDIA_BASE} w-full`;
@@ -17,7 +17,7 @@ export const CARD_MEDIA_ORDER_GRID_OUTER = `${CARD_MEDIA_ORDER_GRID_BASE} w-full
 
 /** Admin edit modal preview: slightly shorter, same contain + background system. */
 export const CARD_MEDIA_PREVIEW_OUTER =
-  "relative h-[120px] w-full shrink-0 overflow-hidden rounded-2xl bg-gradient-to-b from-stone-100 via-amber-50/45 to-orange-50/35 ring-1 ring-stone-200/55 sm:h-[128px]";
+  "relative h-[120px] w-full shrink-0 overflow-hidden rounded-2xl bg-gradient-to-b from-stone-100 via-brand-yellow/25 to-brand-yellow/15 ring-1 ring-stone-200/55 sm:h-[128px]";
 
 /** Inner: padding 8px mobile, 12px sm (within 8–12px spec). */
 export const CARD_MEDIA_INNER = "flex h-full w-full items-center justify-center p-2 sm:p-3";

@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { requireAdminCookie } from "@/lib/admin-api-guard";
-import { getSupabaseServerClient } from "@/lib/supabase";
+import { fetchAllOrdersForExport } from "@/lib/fetch-orders-for-export";
 import { mapOrdersForExcel, resolveExportDate, isOrderOnBerlinDate } from "@/lib/order-export-rows";
+import { getSupabaseServerClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+/** Large exports: allow enough time for paginated DB reads (Vercel / serverless). */
+export const maxDuration = 120;
 
 export async function GET(req) {
   const unauthorized = requireAdminCookie();
@@ -15,20 +18,28 @@ export async function GET(req) {
   const exportAll = url.searchParams.get("all") === "1";
   const statusFilter = String(url.searchParams.get("status") || "").trim();
 
-  const supabase = getSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("orders")
-    .select("*,order_items(quantity,products(name),menus(name))")
-    .order("created_at", { ascending: true });
+  try {
+    const supabase = getSupabaseServerClient();
+    const { orders: fetched, fetchedPages } = await fetchAllOrdersForExport(supabase);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    let rows = fetched;
+    if (!exportAll) rows = rows.filter((o) => isOrderOnBerlinDate(o, exportDate));
+    if (statusFilter) rows = rows.filter((o) => String(o.status || "") === statusFilter);
 
-  let rows = data || [];
-  if (!exportAll) rows = rows.filter((o) => isOrderOnBerlinDate(o, exportDate));
-  if (statusFilter) rows = rows.filter((o) => String(o.status || "") === statusFilter);
-
-  return NextResponse.json({
-    date: exportDate,
-    rows: mapOrdersForExcel(rows)
-  });
+    return NextResponse.json({
+      date: exportDate,
+      rows: mapOrdersForExcel(rows),
+      meta: {
+        exportAll,
+        ordersFetched: fetched.length,
+        ordersExported: rows.length,
+        fetchedPages,
+        statusFilter: statusFilter || null
+      }
+    });
+  } catch (e) {
+    const message = String(e?.message || e);
+    const status = e?.code === "EXPORT_LIMIT" ? 413 : 500;
+    return NextResponse.json({ error: message }, { status });
+  }
 }

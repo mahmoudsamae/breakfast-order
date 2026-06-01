@@ -15,7 +15,7 @@ export default async function BranchAdminPage({ params }) {
   const apiPrefix = `/api/branches/${slug}/admin`;
 
   return (
-    <div className="fb-page-branch">
+    <div className="fb-page-branch bg-gradient-to-b from-brand-yellow/10 via-slate-50 to-slate-50">
       <div className="mb-3 flex justify-end text-xs">
         <Link href={`/b/${slug}/login`} className="text-slate-500 hover:text-slate-800">
           Interner Bereich

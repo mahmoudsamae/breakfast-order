@@ -2,7 +2,9 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import BranchAppChrome from "@/components/BranchAppChrome";
 import RegisterClient from "@/components/RegisterClient";
+import RegistrationHiddenNotice from "@/components/RegistrationHiddenNotice";
 import { fetchBranchBySlug } from "@/lib/branch-server";
+import { SHOW_REGISTRATION_UI } from "@/lib/feature-flags";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -12,6 +14,10 @@ export default async function BranchRegisterPage({ params }) {
   if (error || !branch) notFound();
 
   const slug = branch.slug;
+
+  if (!SHOW_REGISTRATION_UI) {
+    return <RegistrationHiddenNotice branchSlug={slug} branchName={branch.name} />;
+  }
 
   return (
     <div className="fb-page-order">

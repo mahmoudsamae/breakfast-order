@@ -142,9 +142,9 @@ export default function EigenesMenueModal({ open, onClose, products, onAddToCart
                 return (
                   <div
                     key={row.key}
-                    className={`flex items-center gap-3 rounded-2xl border px-3 py-2.5 ${backSum === 2 && Number(back[row.key]) > 0 ? "border-amber-300 bg-amber-50/50" : "border-slate-200 bg-white"}`}
+                    className={`flex items-center gap-3 rounded-2xl border px-3 py-2.5 ${backSum === 2 && Number(back[row.key]) > 0 ? "border-brand-teal bg-brand-yellow/15" : "border-slate-200 bg-white"}`}
                   >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-xl">{row.icon}</span>
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-yellow/25 text-xl">{row.icon}</span>
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-slate-900">{row.label}</p>
                       <p className="text-xs text-slate-500">{unit} · Stück</p>
@@ -166,7 +166,7 @@ export default function EigenesMenueModal({ open, onClose, products, onAddToCart
                 );
               })}
             </div>
-            <p className={`mt-2 text-xs font-medium ${backSum === 2 ? "text-emerald-700" : "text-amber-800"}`}>
+            <p className={`mt-2 text-xs font-medium ${backSum === 2 ? "text-brand-green" : "text-brand-green"}`}>
               Gewählt: {backSum} / 2
             </p>
           </section>
@@ -178,9 +178,9 @@ export default function EigenesMenueModal({ open, onClose, products, onAddToCart
               {EIGENES_MARMELADE.map((row) => (
                 <div
                   key={row.key}
-                  className={`flex items-center gap-3 rounded-2xl border px-3 py-2.5 ${jamMeta.qty >= 1 && Number(jam[row.key]) > 0 ? "border-amber-300 bg-amber-50/50" : "border-slate-200 bg-white"}`}
+                  className={`flex items-center gap-3 rounded-2xl border px-3 py-2.5 ${jamMeta.qty >= 1 && Number(jam[row.key]) > 0 ? "border-brand-teal bg-brand-yellow/15" : "border-slate-200 bg-white"}`}
                 >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-xl">{row.icon}</span>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-yellow/15 text-xl">{row.icon}</span>
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-slate-900">{row.label}</p>
                     <p className="text-xs text-slate-500">{formatMoney(EIGENES_PREIS_MARMELADE[row.key] ?? 0)} pro Portion</p>
@@ -201,7 +201,7 @@ export default function EigenesMenueModal({ open, onClose, products, onAddToCart
                 </div>
               ))}
             </div>
-            <p className={`mt-2 text-xs font-medium ${jamMeta.qty >= 1 && jamMeta.qty <= 2 ? "text-emerald-700" : "text-amber-800"}`}>
+            <p className={`mt-2 text-xs font-medium ${jamMeta.qty >= 1 && jamMeta.qty <= 2 ? "text-brand-green" : "text-brand-green"}`}>
               Portionen: {jamMeta.qty} (Ziel: 1–2)
             </p>
           </section>
@@ -217,7 +217,7 @@ export default function EigenesMenueModal({ open, onClose, products, onAddToCart
                     type="button"
                     onClick={() => setDrink(row.key)}
                     className={`min-h-[3.25rem] rounded-2xl border px-3 py-3 text-left text-sm font-semibold leading-snug transition active:scale-[0.98] ${
-                      sel ? "border-amber-500 bg-amber-50 ring-2 ring-amber-400" : "border-slate-200 bg-white hover:border-amber-200"
+                      sel ? "border-brand-orange bg-brand-yellow/15 ring-2 ring-brand-teal" : "border-slate-200 bg-white hover:border-brand-yellow/50"
                     }`}
                   >
                     <span className="mr-1.5">{row.icon}</span>
@@ -234,14 +234,14 @@ export default function EigenesMenueModal({ open, onClose, products, onAddToCart
             <p className="mt-1 text-slate-600">
               Backwaren: {formatMoney(breadPrices)} · Zusatz Marmelade/Getränk: {formatMoney(zusatzPreis)}
             </p>
-            <p className="mt-2 text-base font-bold text-amber-900">Zwischensumme: {formatMoney(previewTotal)}</p>
+            <p className="mt-2 text-base font-bold text-brand-green">Zwischensumme: {formatMoney(previewTotal)}</p>
           </div>
 
           <button
             type="button"
             disabled={!canSubmit}
             onClick={handleAdd}
-            className="min-h-12 w-full rounded-2xl bg-gradient-to-r from-amber-600 to-orange-600 py-3.5 text-sm font-bold text-white shadow-md active:brightness-95 disabled:cursor-not-allowed disabled:opacity-45"
+            className="min-h-12 w-full rounded-2xl bg-brand-green py-3.5 text-sm font-bold text-white shadow-md hover:brightness-95 active:brightness-90 disabled:cursor-not-allowed disabled:opacity-45"
           >
             Zum Warenkorb hinzufügen
           </button>

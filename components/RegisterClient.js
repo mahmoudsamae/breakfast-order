@@ -100,11 +100,11 @@ function nationalityFromCountry(country) {
 
 /** Reception-focused contact fields */
 const keyInputClass =
-  "fb-input border-2 border-amber-300/80 bg-amber-50/60 shadow-sm focus:border-amber-500 focus:ring-amber-200/50";
+  "fb-input border-2 border-brand-teal/80 bg-brand-yellow/15 shadow-sm focus:border-brand-orange focus:ring-2 focus:ring-brand-yellow/40";
 
 /** Person name + birth */
 const personInputClass =
-  "fb-input border-2 border-slate-300/90 bg-white shadow-sm focus:border-amber-500 focus:ring-amber-100/80";
+  "fb-input border-2 border-slate-300/90 bg-white shadow-sm focus:border-brand-orange focus:ring-brand-yellow/25";
 
 function isYmd(s) {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(s || ""));
@@ -115,7 +115,7 @@ function FormSection({ title, hint, highlight, children }) {
     <section
       className={
         highlight
-          ? "space-y-4 rounded-2xl border-2 border-amber-200/80 bg-gradient-to-b from-amber-50/90 to-white p-4 shadow-sm ring-1 ring-amber-100/80 sm:p-5"
+          ? "space-y-4 rounded-2xl border-2 border-brand-yellow/50 bg-gradient-to-b from-brand-yellow/15 to-white p-4 shadow-sm ring-1 ring-brand-yellow/25 sm:p-5"
           : "space-y-4 border-b border-slate-100 pb-6 last:border-b-0 last:pb-0"
       }
     >
@@ -268,7 +268,7 @@ export default function RegisterClient({ branchSlug, branchName }) {
           <div className="mt-4">
             <Link
               href={`/b/${branchSlug}/order`}
-              className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-white px-4 py-2.5 text-sm font-bold text-amber-900 shadow-md"
+              className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-white px-4 py-2.5 text-sm font-bold text-brand-green shadow-md"
             >
               Frühstück für morgen bestellen
             </Link>
@@ -311,7 +311,7 @@ export default function RegisterClient({ branchSlug, branchName }) {
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className="fb-label" htmlFor="reg-arrival">
-              Anreise <span className="text-amber-800">*</span>
+              Anreise <span className="text-brand-green">*</span>
             </label>
             <input
               id="reg-arrival"
@@ -324,7 +324,7 @@ export default function RegisterClient({ branchSlug, branchName }) {
           </div>
           <div>
             <label className="fb-label" htmlFor="reg-departure">
-              Abreise <span className="text-amber-800">*</span>
+              Abreise <span className="text-brand-green">*</span>
             </label>
             <input
               id="reg-departure"
@@ -368,7 +368,7 @@ export default function RegisterClient({ branchSlug, branchName }) {
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className="fb-label" htmlFor="reg-fn">
-              Vorname <span className="font-semibold text-amber-800">*</span>
+              Vorname <span className="font-semibold text-brand-green">*</span>
             </label>
             <input
               id="reg-fn"
@@ -381,7 +381,7 @@ export default function RegisterClient({ branchSlug, branchName }) {
           </div>
           <div>
             <label className="fb-label" htmlFor="reg-ln">
-              Nachname <span className="font-semibold text-amber-800">*</span>
+              Nachname <span className="font-semibold text-brand-green">*</span>
             </label>
             <input
               id="reg-ln"
@@ -395,7 +395,7 @@ export default function RegisterClient({ branchSlug, branchName }) {
         </div>
         <div className="sm:max-w-sm">
           <label className="fb-label" htmlFor="reg-birth">
-            Geburtsdatum <span className="font-semibold text-amber-800">*</span>
+            Geburtsdatum <span className="font-semibold text-brand-green">*</span>
           </label>
           <input
             id="reg-birth"
@@ -413,7 +413,7 @@ export default function RegisterClient({ branchSlug, branchName }) {
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="min-w-0">
             <label className="fb-label" htmlFor="reg-phone">
-              Handynummer <span className="font-semibold text-amber-800">*</span>
+              Handynummer <span className="font-semibold text-brand-green">*</span>
             </label>
             <input
               id="reg-phone"
@@ -429,7 +429,7 @@ export default function RegisterClient({ branchSlug, branchName }) {
           </div>
           <div className="min-w-0">
             <label className="fb-label" htmlFor="reg-email">
-              E-Mailadresse <span className="font-semibold text-amber-800">*</span>
+              E-Mailadresse <span className="font-semibold text-brand-green">*</span>
             </label>
             <input
               id="reg-email"
@@ -445,7 +445,7 @@ export default function RegisterClient({ branchSlug, branchName }) {
           </div>
           <div className="min-w-0 sm:col-span-2">
             <label className="fb-label" htmlFor="reg-plate">
-              Kfz-Kennzeichen / License plate <span className="font-semibold text-amber-800">*</span>
+              Kfz-Kennzeichen / License plate <span className="font-semibold text-brand-green">*</span>
             </label>
             <input
               id="reg-plate"

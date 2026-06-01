@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -89,7 +89,7 @@ export default function RootBranchEditor({ branchId, initialBranch, initialCrede
   return (
     <div className="space-y-10">
       <p>
-        <Link href="/internal/root/branches" className="text-sm font-medium text-amber-800 hover:underline">
+        <Link href="/internal/root/branches" className="text-sm font-medium text-brand-green hover:underline">
           ← Alle Standorte
         </Link>
       </p>
@@ -132,7 +132,7 @@ export default function RootBranchEditor({ branchId, initialBranch, initialCrede
         </form>
         <p className="mt-4 text-xs text-slate-500">
           Öffentliche Bestellseite:{" "}
-          <Link href={`/b/${slug}`} className="text-amber-800 hover:underline">
+          <Link href={`/b/${slug}`} className="text-brand-green hover:underline">
             /b/{slug}
           </Link>
         </p>

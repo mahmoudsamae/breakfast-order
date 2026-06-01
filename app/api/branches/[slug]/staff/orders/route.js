@@ -4,6 +4,11 @@ import { fetchBranchBySlug } from "@/lib/branch-server";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { getBerlinNow, MAX_QTY_PER_ITEM } from "@/lib/order-utils";
 import {
+  autoHideDoneOrdersBeforeToday,
+  fetchStaffOrderListCounts,
+  fetchStaffOrdersForList
+} from "@/lib/staff-orders-list";
+import {
   DAY_MATRIX_STATUSES,
   mapOrdersWithSummary,
   menuTotalsFromOrders,
@@ -24,6 +29,7 @@ export async function GET(req, { params }) {
   const supabase = getSupabaseServerClient();
   const url = new URL(req.url);
   const q = (url.searchParams.get("q") || "").toLowerCase();
+  const listMode = url.searchParams.get("list") === "done" ? "done" : "open";
   const pickupDate = pickupDateForService(url.searchParams.get("service"));
   const branchId = branch.id;
   const [{ data: productsData, error: productsErr }, { data: menusData, error: menusErr }] = await Promise.all([
@@ -46,22 +52,33 @@ export async function GET(req, { params }) {
   if (productsErr) return NextResponse.json({ error: productsErr.message }, { status: 500 });
   if (menusErr) return NextResponse.json({ error: menusErr.message }, { status: 500 });
 
-  const { data, error } = await supabase
-    .from("orders")
-    .select(STAFF_ORDER_SELECT)
-    .eq("branch_id", branchId)
-    .eq("pickup_date", pickupDate)
-    .eq("status", "pending")
-    .order("created_at", { ascending: true });
+  const { date: todayBerlin } = getBerlinNow();
+  try {
+    await autoHideDoneOrdersBeforeToday(supabase, { branchId, todayYmd: todayBerlin });
+  } catch (autoErr) {
+    return NextResponse.json({ error: String(autoErr.message || autoErr) }, { status: 500 });
+  }
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const [{ orders: listOrders, error: listErr }, countsRes] = await Promise.all([
+    fetchStaffOrdersForList(supabase, { branchId, pickupDate, listMode }),
+    fetchStaffOrderListCounts(supabase, { branchId, pickupDate })
+  ]);
 
-  const orders = mapOrdersWithSummary(data);
+  if (listErr) return NextResponse.json({ error: listErr.message }, { status: 500 });
+  if (countsRes.error) return NextResponse.json({ error: countsRes.error.message }, { status: 500 });
 
-  const normalizedProducts = packlistProductsFromOrders(orders);
+  const orders = listOrders;
+  let pendingForPrep = orders;
+  if (listMode === "done") {
+    const openRes = await fetchStaffOrdersForList(supabase, { branchId, pickupDate, listMode: "open" });
+    if (openRes.error) return NextResponse.json({ error: openRes.error.message }, { status: 500 });
+    pendingForPrep = openRes.orders;
+  }
+
+  const normalizedProducts = packlistProductsFromOrders(pendingForPrep);
   const preparationSummary = {
     products: normalizedProducts,
-    menus: menuTotalsFromOrders(orders)
+    menus: menuTotalsFromOrders(pendingForPrep)
   };
   const preparationPacklist = normalizedProducts;
 
@@ -83,7 +100,13 @@ export async function GET(req, { params }) {
     : orders;
   return NextResponse.json({
     orders: filtered,
+    listMode,
     pickupDate,
+    counts: {
+      open: countsRes.openCount,
+      done: countsRes.doneCount
+    },
+    staffHiddenSupported: countsRes.staffHiddenSupported,
     preparationSummary,
     preparationPacklist,
     dayMatrixPacklist,

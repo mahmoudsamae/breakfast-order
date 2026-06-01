@@ -4,7 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CardImageMedia, CardImageMediaThumb } from "@/components/CardImageMedia";
 import EigenesMenueModal from "@/components/EigenesMenueModal";
 import QuantityPicker from "@/components/QuantityPicker";
+import DuplicateOrderConfirmModal from "@/components/DuplicateOrderConfirmModal";
+import { useI18n } from "@/components/I18nProvider";
 import OrderSuccessModal from "@/components/OrderSuccessModal";
+import { localeToBcp47 } from "@/lib/i18n/locale-utils";
+import { tomorrowBerlinDate } from "@/lib/order-utils";
 import {
   EIGENES_GETRAENKE,
   EIGENES_MARMELADE,
@@ -19,6 +23,7 @@ import { readLastOrderSummary, writeLastOrderSummary } from "@/lib/last-order-st
 import { clearRegistrationNumberSession, readRegistrationNumberSession } from "@/lib/registration-session";
 
 export default function OrderClient({ products, menus, loadError, branchSlug, orderApiPath, branchDisplayName }) {
+  const { t, locale } = useI18n();
   const [name, setName] = useState("");
   const nameInputRef = useRef(null);
   const [productQty, setProductQty] = useState({});
@@ -40,6 +45,7 @@ export default function OrderClient({ products, menus, loadError, branchSlug, or
   const [lastOrderStored, setLastOrderStored] = useState(null);
   const [sending, setSending] = useState(false);
   const [cartPreviewOpen, setCartPreviewOpen] = useState(false);
+  const [duplicateConfirm, setDuplicateConfirm] = useState(null);
 
   const { backwaren, heissgetraenke, marmeladeExtras } = useMemo(
     () => groupProductsForOrderPage(products),
@@ -112,11 +118,25 @@ export default function OrderClient({ products, menus, loadError, branchSlug, or
     return { key: `em-${idx}`, jamParts, dLab, sub: summeEigenesMenueZusatzEntry(z) };
   }
 
-  async function submit() {
+  const pickupDateLabel = useMemo(() => {
+    const ymd = tomorrowBerlinDate();
+    const loc = localeToBcp47(locale);
+    try {
+      return new Date(`${ymd}T12:00:00`).toLocaleDateString(loc, {
+        weekday: "long",
+        day: "numeric",
+        month: "long"
+      });
+    } catch {
+      return ymd;
+    }
+  }, [locale]);
+
+  async function submit({ confirmDuplicate = false } = {}) {
     setBanner("");
     setOutsideTimeModalOpen(false);
     if (!name.trim()) {
-      setNameError("Bitte geben Sie Ihren Namen ein.");
+      setNameError(t("order.nameRequired"));
       setNameFieldPulse(true);
       const input = nameInputRef.current;
       if (input) {
@@ -137,12 +157,20 @@ export default function OrderClient({ products, menus, loadError, branchSlug, or
         menuQuantities: menuQty,
         eigenesMenueZusatz: eigenesMenueZusatz.length > 0 ? eigenesMenueZusatz : undefined,
         source: "qr",
-        registrationNumber: registrationNumber ?? undefined
+        registrationNumber: registrationNumber ?? undefined,
+        confirmDuplicate
       })
     });
     const data = await res.json();
     setSending(false);
     if (!res.ok) {
+      if (res.status === 409 && data.code === "DUPLICATE_ORDER") {
+        setDuplicateConfirm({
+          customerName: name.trim(),
+          existingOrderNumber: data.existingOrderNumber ?? null
+        });
+        return;
+      }
       const msg = String(data.error || "Bestellung fehlgeschlagen.");
       if (/08:00.*21:00/.test(msg)) {
         setOutsideTimeModalOpen(true);
@@ -151,6 +179,7 @@ export default function OrderClient({ products, menus, loadError, branchSlug, or
       setBanner(msg);
       return;
     }
+    setDuplicateConfirm(null);
     clearRegistrationNumberSession(branchSlug);
     const snapshot = buildOrderSummarySnapshot({
       products,
@@ -187,22 +216,20 @@ export default function OrderClient({ products, menus, loadError, branchSlug, or
 
   useEffect(() => {
     if (!nameFieldPulse) return;
-    const t = window.setTimeout(() => setNameFieldPulse(false), 700);
-    return () => window.clearTimeout(t);
+    const pulseTimer = window.setTimeout(() => setNameFieldPulse(false), 700);
+    return () => window.clearTimeout(pulseTimer);
   }, [nameFieldPulse]);
 
   return (
     <div className="space-y-5 sm:space-y-6">
-      <section className="rounded-3xl bg-gradient-to-br from-amber-600 via-orange-500 to-rose-500 p-5 text-white shadow-xl sm:p-6">
-        <p className="text-xs uppercase tracking-[0.2em] text-white/70">Morgen früh startklar</p>
-        <h1 className="mt-2 text-xl font-bold leading-tight sm:text-2xl">Frühstück vorbestellen</h1>
+      <section className="fb-hero">
+        <p className="text-xs uppercase tracking-[0.2em] text-white/70">{t("order.heroTag")}</p>
+        <h1 className="mt-2 text-xl font-bold leading-tight sm:text-2xl">{t("order.heroTitle")}</h1>
         <div className="mt-3 rounded-2xl border border-white/25 bg-white/10 px-3 py-3 backdrop-blur-sm sm:mt-4 sm:px-4">
-          <p className="text-sm font-semibold tracking-tight sm:text-base">Brötchenbestellungsformular</p>
-          <p className="mt-2 text-sm leading-relaxed text-white/95">
-            Bestellung ist von 08:00 bis 21:00 Uhr möglich.
-          </p>
+          <p className="text-sm font-semibold tracking-tight sm:text-base">{t("order.heroForm")}</p>
+          <p className="mt-2 text-sm leading-relaxed text-white/95">{t("order.heroHours")}</p>
         </div>
-        <p className="mt-3 text-sm leading-snug text-white/90 sm:mt-4">Bestellung ist von 08:00 bis 21:00 Uhr möglich. · Abholung am nächsten Tag</p>
+        <p className="mt-3 text-sm leading-snug text-white/90 sm:mt-4">{t("order.heroPickup")}</p>
       </section>
       {loadError ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm leading-relaxed text-red-800 break-words">
@@ -222,14 +249,14 @@ export default function OrderClient({ products, menus, loadError, branchSlug, or
           setName(e.target.value);
           if (nameError) setNameError("");
         }}
-        placeholder="Vor- und Nachname"
+        placeholder={t("order.namePlaceholder")}
         autoComplete="name"
         aria-invalid={nameError ? "true" : "false"}
         aria-describedby={nameError ? "order-name-error" : undefined}
         className={`w-full min-h-12 rounded-2xl border bg-white px-4 py-3 text-base text-slate-900 shadow-sm outline-none ring-slate-300/0 transition focus:ring-2 ${
           nameError
             ? "border-red-300 focus:border-red-400 focus:ring-red-200/60"
-            : "border-slate-200 focus:border-amber-400 focus:ring-amber-200/60"
+            : "border-slate-200 focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/25"
         } ${nameFieldPulse ? "animate-pulse" : ""}`}
       />
       {nameError ? (
@@ -247,14 +274,14 @@ export default function OrderClient({ products, menus, loadError, branchSlug, or
           {eigenesMenueZusatz.map((z, idx) => {
             const line = formatEigenesCartLine(z, idx);
             return (
-              <div key={line.key} className="rounded-3xl bg-white p-4 ring-1 ring-amber-200/80">
-                <p className="text-xs font-bold uppercase tracking-wide text-amber-800/90">Position {idx + 1}</p>
+              <div key={line.key} className="rounded-3xl bg-white p-4 ring-1 ring-brand-yellow/50">
+                <p className="text-xs font-bold uppercase tracking-wide text-brand-green/90">Position {idx + 1}</p>
                 <p className="mt-1 text-sm text-slate-700">
                   Marmelade: {line.jamParts || "—"}
                   <br />
                   Getränk: {line.dLab}
                 </p>
-                <p className="mt-2 font-semibold text-amber-900">Zusatz: {formatMoney(line.sub)}</p>
+                <p className="mt-2 font-semibold text-brand-green">Zusatz: {formatMoney(line.sub)}</p>
               </div>
             );
           })}
@@ -278,7 +305,7 @@ export default function OrderClient({ products, menus, loadError, branchSlug, or
       />
 
       <section className="scroll-mt-24">
-        <h2 className="text-lg font-bold">Empfohlen</h2>
+        <h2 className="text-lg font-bold">{t("order.recommended")}</h2>
         <div className="mt-3 space-y-3">
           {menus.map((m) => (
             <div key={m.id} className="rounded-3xl bg-white p-3 ring-1 ring-slate-200 sm:p-4">
@@ -289,7 +316,7 @@ export default function OrderClient({ products, menus, loadError, branchSlug, or
                 <div className="min-w-0 flex-1">
                   <p className="break-words font-bold leading-snug">{m.name}</p>
                   <p className="mt-1 break-words text-sm leading-relaxed text-slate-600">{m.description || "—"}</p>
-                  <p className="mt-2 font-semibold text-amber-700">{formatMoney(m.price)}</p>
+                  <p className="mt-2 font-semibold text-brand-green">{formatMoney(m.price)}</p>
                   <div className="mt-3 flex justify-end sm:mt-4">
                     <QuantityPicker
                       size="compact"
@@ -308,9 +335,9 @@ export default function OrderClient({ products, menus, loadError, branchSlug, or
           <button
             type="button"
             onClick={() => setEigenesModalOpen(true)}
-            className="min-h-12 w-full rounded-2xl border-2 border-dashed border-amber-300/90 bg-gradient-to-r from-amber-50/80 to-orange-50/60 px-3 py-3.5 text-sm font-bold text-amber-950 shadow-sm transition hover:border-amber-400 hover:from-amber-50 hover:to-orange-50 active:scale-[0.99]"
+            className="min-h-12 w-full rounded-2xl border-2 border-dashed border-brand-teal/90 bg-gradient-to-r from-brand-yellow/15 to-brand-yellow/15 px-3 py-3.5 text-sm font-bold text-slate-900 shadow-sm transition hover:border-brand-teal hover:from-brand-yellow/15 hover:to-brand-yellow/15 active:scale-[0.99]"
           >
-            Eigenes Menü erstellen
+            {t("order.customMenuCreate")}
           </button>
         </div>
       </section>
@@ -412,14 +439,14 @@ export default function OrderClient({ products, menus, loadError, branchSlug, or
               <ul className="mt-2 divide-y divide-slate-100 rounded-2xl border border-slate-100 bg-slate-50/60">
                 {cartPreviewRows.map((row) =>
                   row.header ? (
-                    <li key={row.key} className="bg-amber-50/90 px-3 py-2 text-xs font-bold uppercase tracking-wide text-amber-900">
+                    <li key={row.key} className="bg-brand-yellow/15 px-3 py-2 text-xs font-bold uppercase tracking-wide text-brand-green">
                       {row.title}
                     </li>
                   ) : (
                     <li key={row.key} className="flex gap-3 px-3 py-2.5">
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-base ring-1 ring-slate-100">{row.icon}</span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-bold uppercase text-amber-800/80">{row.badge}</p>
+                        <p className="text-[10px] font-bold uppercase text-brand-green/80">{row.badge}</p>
                         <p className="text-sm font-semibold text-slate-900">{row.title}</p>
                         <p className="text-xs text-slate-600">
                           {row.qty} × {formatMoney(row.unit)}
@@ -441,7 +468,7 @@ export default function OrderClient({ products, menus, loadError, branchSlug, or
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-2">
           <div className="flex min-h-11 items-center justify-between gap-3 sm:min-w-0 sm:justify-start">
             <p className="text-sm font-semibold tabular-nums sm:text-base">
-              Gesamt: {formatMoney(total)}
+              {t("order.total")}: {formatMoney(total)}
             </p>
             {hasCartLines ? (
               <button
@@ -450,22 +477,35 @@ export default function OrderClient({ products, menus, loadError, branchSlug, or
                 className="min-h-11 shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm ring-1 ring-slate-100 active:bg-slate-50 sm:min-h-0 sm:py-1.5"
               >
                 <>
-                  <span className="sm:hidden">{cartPreviewOpen ? "Ausblenden" : "Warenkorb"}</span>
-                  <span className="hidden sm:inline">{cartPreviewOpen ? "Produkte ausblenden" : "Produkte anzeigen"}</span>
+                  <span className="sm:hidden">{cartPreviewOpen ? t("order.cartHide") : t("order.cartShow")}</span>
+                  <span className="hidden sm:inline">
+                    {cartPreviewOpen ? t("order.cartHideDesktop") : t("order.cartShowDesktop")}
+                  </span>
                 </>
               </button>
             ) : null}
           </div>
           <button
             disabled={sending}
-            onClick={submit}
-            className="min-h-12 w-full shrink-0 rounded-2xl bg-gradient-to-r from-amber-600 to-orange-600 px-5 py-3.5 text-sm font-bold text-white shadow-md active:brightness-95 disabled:opacity-60 sm:min-h-11 sm:w-auto sm:py-3"
+            onClick={() => submit()}
+            className="min-h-12 w-full shrink-0 rounded-2xl bg-brand-green px-5 py-3.5 text-sm font-bold text-white shadow-md hover:brightness-95 active:brightness-90 disabled:opacity-60 sm:min-h-11 sm:w-auto sm:py-3"
           >
-            {sending ? "Senden…" : "Jetzt bestellen"}
+            {sending ? t("order.submitting") : t("order.submit")}
           </button>
         </div>
       </div>
 
+      <DuplicateOrderConfirmModal
+        open={Boolean(duplicateConfirm)}
+        customerName={duplicateConfirm?.customerName || name.trim()}
+        existingOrderNumber={duplicateConfirm?.existingOrderNumber ?? null}
+        pickupDateLabel={pickupDateLabel}
+        onCancel={() => setDuplicateConfirm(null)}
+        onConfirm={() => {
+          setDuplicateConfirm(null);
+          submit({ confirmDuplicate: true });
+        }}
+      />
       <OrderSuccessModal
         open={success.open}
         customerName={success.customerName}
@@ -487,17 +527,15 @@ export default function OrderClient({ products, menus, loadError, branchSlug, or
             role="dialog"
             aria-modal="true"
           >
-            <h3 className="text-lg font-bold text-slate-900">Bestellung aktuell nicht möglich</h3>
-            <p className="mt-2 text-sm leading-relaxed text-slate-700">
-              Bestellungen sind nur zwischen 08:00 und 21:00 Uhr möglich.
-            </p>
+            <h3 className="text-lg font-bold text-slate-900">{t("order.outsideHoursTitle")}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-slate-700">{t("order.outsideHoursBody")}</p>
             <div className="mt-6 flex justify-end">
               <button
                 type="button"
                 onClick={() => setOutsideTimeModalOpen(false)}
-                className="min-h-11 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white sm:min-h-0 sm:py-2"
+                className="min-h-11 rounded-xl bg-brand-green px-4 py-2.5 text-sm font-semibold text-white hover:brightness-95 sm:min-h-0 sm:py-2"
               >
-                Verstanden
+                {t("common.understood")}
               </button>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import RootSectionTitle from "@/components/internal/RootSectionTitle";
 import { getSupabaseServerClient } from "@/lib/supabase";
 
@@ -50,7 +50,7 @@ export default async function RootUsersPage() {
                     {r.branch_id ? (
                       <Link
                         href={`/internal/root/branches/${r.branch_id}`}
-                        className="font-medium text-amber-800 hover:underline"
+                        className="font-medium text-brand-green hover:underline"
                       >
                         Bearbeiten
                       </Link>

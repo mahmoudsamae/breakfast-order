@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -79,7 +79,7 @@ export default function RootLoginForm() {
       </div>
 
       <p className="mt-8 text-center text-sm">
-        <Link href="/" className="font-medium text-amber-800 underline-offset-2 hover:underline">
+        <Link href="/" className="font-medium text-brand-green underline-offset-2 hover:underline">
           Zur Startseite
         </Link>
       </p>

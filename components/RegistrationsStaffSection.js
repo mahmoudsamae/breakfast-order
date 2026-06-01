@@ -198,7 +198,7 @@ function IntakeDetailModal({ r, onClose, onPurge, onPrint, busyId }) {
           <button
             type="button"
             disabled={busyId === r.id}
-            className="fb-btn-secondary flex-1 border-emerald-200 bg-emerald-50 font-semibold text-emerald-950"
+            className="fb-btn-secondary flex-1 border-brand-green/35 bg-brand-green/10 font-semibold text-brand-green"
             onClick={() => onPurge(r.id)}
           >
             {busyId === r.id ? "…" : "Erledigt & Daten löschen"}
@@ -389,7 +389,7 @@ export default function RegistrationsStaffSection({ apiPrefix }) {
   }
 
   return (
-    <section className="rounded-3xl border border-amber-200/80 bg-white p-4 shadow-md ring-1 ring-slate-200/90 sm:p-5">
+    <section className="rounded-3xl border border-brand-yellow/50 bg-white p-4 shadow-md ring-1 ring-slate-200/90 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h2 className="text-base font-bold leading-snug text-slate-900">Gäste-Anmeldungen</h2>
@@ -444,7 +444,7 @@ export default function RegistrationsStaffSection({ apiPrefix }) {
 
       {filteredPending.length > 0 ? (
         <div className="mt-4">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-amber-800">Offen (mit Personendaten)</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-brand-green">Offen (mit Personendaten)</p>
           <ul className="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-2">
             {filteredPending.map((r) => (
               <li key={r.id}>
@@ -460,7 +460,7 @@ export default function RegistrationsStaffSection({ apiPrefix }) {
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex min-w-0 items-center gap-2">
-                          <p className="text-base font-black tabular-nums leading-none tracking-tight text-amber-950">#{r.registration_number ?? "—"}</p>
+                          <p className="text-base font-black tabular-nums leading-none tracking-tight text-slate-900">#{r.registration_number ?? "—"}</p>
                         </div>
                         <div className="flex min-h-8 shrink-0 items-start justify-end gap-1.5">
                           {signatureRequired ? (

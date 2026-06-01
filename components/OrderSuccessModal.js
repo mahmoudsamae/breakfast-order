@@ -1,13 +1,16 @@
 "use client";
 
+import { useI18n } from "@/components/I18nProvider";
+import { localeToBcp47 } from "@/lib/i18n/locale-utils";
 import { formatMoney } from "@/lib/format-money";
 
-function formatSavedAt(iso) {
+function formatSavedAt(iso, locale) {
   if (!iso || typeof iso !== "string") return null;
   try {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return null;
-    return d.toLocaleString("de-DE", {
+    const loc = localeToBcp47(locale);
+    return d.toLocaleString(loc, {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -28,9 +31,10 @@ export default function OrderSuccessModal({
   savedAt,
   onClose
 }) {
+  const { t, locale } = useI18n();
   if (!open) return null;
 
-  const savedLabel = formatSavedAt(savedAt);
+  const savedLabel = formatSavedAt(savedAt, locale);
   const safeLines = Array.isArray(lines) ? lines : [];
 
   return (
@@ -47,29 +51,29 @@ export default function OrderSuccessModal({
         aria-labelledby="order-success-title"
       >
         <h2 id="order-success-title" className="text-center text-xl font-bold sm:text-2xl">
-          Bestellung eingegangen
+          {t("success.title")}
         </h2>
-        <p className="mt-1 text-center text-sm text-slate-500">Vielen Dank für Ihre Bestellung.</p>
+        <p className="mt-1 text-center text-sm text-slate-500">{t("success.thanks")}</p>
 
         <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4 sm:px-5">
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Name zur Abholung</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{t("success.pickupName")}</p>
           <p className="mt-1 break-words text-lg font-bold leading-snug text-slate-900 sm:text-xl">{customerName}</p>
         </div>
 
-        <div className="mt-4 rounded-2xl bg-slate-900 px-4 py-5 text-white sm:px-5">
-          <p className="text-xs uppercase tracking-wider text-white/70">Bestellnummer</p>
+        <div className="mt-4 rounded-2xl bg-brand-green px-4 py-5 text-white sm:px-5">
+          <p className="text-xs uppercase tracking-wider text-white/70">{t("success.orderNumber")}</p>
           <p className="mt-1 text-3xl font-black tabular-nums sm:text-4xl">#{orderNumber ?? "—"}</p>
         </div>
 
         <div className="mt-5">
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Ihre Auswahl</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{t("success.yourSelection")}</p>
           {safeLines.length === 0 ? (
-            <p className="mt-3 text-base text-slate-600">Keine Positionsdetails verfügbar.</p>
+            <p className="mt-3 text-base text-slate-600">{t("success.noLines")}</p>
           ) : (
             <ul className="mt-3 divide-y divide-slate-100 rounded-2xl border border-slate-100 bg-slate-50/80">
               {safeLines.map((row) =>
                 row.header ? (
-                  <li key={row.key} className="bg-amber-50/90 px-4 py-3 text-sm font-bold uppercase tracking-wide text-amber-900">
+                  <li key={row.key} className="bg-brand-yellow/15 px-4 py-3 text-sm font-bold uppercase tracking-wide text-brand-green">
                     {row.title}
                   </li>
                 ) : (
@@ -81,7 +85,7 @@ export default function OrderSuccessModal({
                       {row.icon}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-bold uppercase text-amber-800/90">{row.badge}</p>
+                      <p className="text-[11px] font-bold uppercase text-brand-green/90">{row.badge}</p>
                       <p className="text-base font-semibold leading-snug text-slate-900">{row.title}</p>
                       <p className="mt-1 text-sm text-slate-600">
                         {row.qty} × {formatMoney(row.unit)}
@@ -95,26 +99,28 @@ export default function OrderSuccessModal({
           )}
         </div>
 
-        <div className="mt-5 flex flex-col gap-1 rounded-2xl border border-amber-200/80 bg-amber-50/50 px-4 py-4 sm:flex-row sm:items-baseline sm:justify-between sm:px-5">
-          <span className="text-base font-semibold text-amber-950">Gesamtpreis</span>
-          <span className="text-2xl font-black tabular-nums text-amber-950 sm:text-3xl">{formatMoney(total ?? 0)}</span>
+        <div className="mt-5 flex flex-col gap-1 rounded-2xl border border-brand-yellow/50 bg-brand-yellow/15 px-4 py-4 sm:flex-row sm:items-baseline sm:justify-between sm:px-5">
+          <span className="text-base font-semibold text-slate-900">{t("success.totalPrice")}</span>
+          <span className="text-2xl font-black tabular-nums text-slate-900 sm:text-3xl">{formatMoney(total ?? 0)}</span>
         </div>
 
-        <p className="mt-5 rounded-2xl bg-amber-50 px-4 py-3.5 text-base font-medium leading-relaxed text-amber-950">
-          Bitte nennen Sie uns morgen Ihren Namen und Ihre Bestellnummer.
+        <p className="mt-5 rounded-2xl bg-brand-yellow/15 px-4 py-3.5 text-base font-medium leading-relaxed text-slate-900">
+          {t("success.pickupHint")}
         </p>
-        <p className="mt-3 text-base text-slate-600">Abholung morgen ab 08:00 Uhr.</p>
+        <p className="mt-3 text-base text-slate-600">{t("success.pickupTime")}</p>
 
         {savedLabel ? (
-          <p className="mt-3 text-center text-xs text-slate-500">Auf diesem Gerät gespeichert: {savedLabel}</p>
+          <p className="mt-3 text-center text-xs text-slate-500">
+            {t("success.savedOnDevice")}: {savedLabel}
+          </p>
         ) : null}
 
         <button
           type="button"
           onClick={onClose}
-          className="mt-6 min-h-12 w-full rounded-2xl bg-slate-900 px-5 py-3.5 text-base font-semibold text-white active:bg-slate-800"
+          className="mt-6 min-h-12 w-full rounded-2xl bg-brand-green px-5 py-3.5 text-base font-semibold text-white hover:brightness-95"
         >
-          Fertig
+          {t("success.close")}
         </button>
         <div className="pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]" aria-hidden />
       </div>

@@ -90,9 +90,9 @@ export default function RootBranchDangerZone({
       </p>
 
       <div className="mt-6 space-y-6">
-        <div className="rounded-xl border border-amber-200 bg-amber-50/90 p-4">
-          <h3 className="text-sm font-semibold text-amber-950">Standort deaktivieren (empfohlen)</h3>
-          <p className="mt-2 text-xs leading-relaxed text-amber-950/90">
+        <div className="rounded-xl border border-brand-yellow/50 bg-brand-yellow/15 p-4">
+          <h3 className="text-sm font-semibold text-slate-900">Standort deaktivieren (empfohlen)</h3>
+          <p className="mt-2 text-xs leading-relaxed text-slate-900/90">
             Der Standort verschwindet von der öffentlichen Startseite. Bestellseite, Team- und Admin-Zugang über die URL sind nicht
             mehr erreichbar (wie bei „nicht gefunden“).{" "}
             <strong>Alle Daten bleiben in der Datenbank</strong> — Bestellungen, Produkte, Menüs und Konten sind unverändert.
@@ -105,7 +105,7 @@ export default function RootBranchDangerZone({
                 setErr("");
                 setDeactivateOpen(true);
               }}
-              className="fb-btn-secondary mt-4 border-amber-300 bg-white text-amber-950"
+              className="fb-btn-secondary mt-4 border-brand-teal bg-white text-slate-900"
             >
               Deaktivieren…
             </button>
