@@ -129,7 +129,7 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
       return;
     }
     setDetailId(null);
-    setOrderListMode("done");
+    await load();
   }
 
   async function markNotPickedUp(id) {
@@ -150,8 +150,7 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
     setConfirmNotPickedUpId(null);
     setNotPickedUpReason(DEFAULT_NOT_PICKED_UP_REASON);
     setNotPickedUpNote("");
-    setDetailId(null);
-    setOrderListMode("done");
+    await load();
   }
 
   useEffect(() => {

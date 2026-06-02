@@ -47,6 +47,13 @@ export default function BranchAppChrome({ branchSlug, branchName, headerActions 
         ? t("chrome.orderTitle")
         : branchName || "Standort";
 
+  const headerSubtitle =
+    isOrder || isRegister
+      ? branchName || null
+      : isLanding
+        ? null
+        : "Frühstück & Team";
+
   useEffect(() => {
     if (!isOrder) {
       setHasLastOrder(false);
@@ -69,12 +76,21 @@ export default function BranchAppChrome({ branchSlug, branchName, headerActions 
   return (
     <>
       <header className="mb-5 flex min-h-10 items-center justify-between gap-3 sm:mb-6 sm:gap-4">
-        <button
-          type="button"
-          onClick={tapLogo}
-          className="min-w-0 flex-1 truncate text-left text-lg font-bold leading-tight tracking-tight text-brand-orange sm:flex-none sm:text-xl"
-        >
-          {titleText}
+        <button type="button" onClick={tapLogo} className="min-w-0 flex-1 sm:flex-none">
+          <span className="inline-flex max-w-full items-center gap-2.5 rounded-2xl bg-white px-3 py-2 shadow-sm ring-1 ring-slate-200/90 sm:gap-3 sm:px-4 sm:py-2.5">
+            <span
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-green via-brand-yellow to-brand-orange text-xs font-black text-white shadow-sm sm:h-10 sm:w-10 sm:text-sm"
+              aria-hidden
+            >
+              A
+            </span>
+            <span className="min-w-0 truncate text-left leading-tight">
+              <span className="block truncate text-sm font-bold text-slate-900 sm:text-base">{titleText}</span>
+              {headerSubtitle ? (
+                <span className="block truncate text-[11px] font-semibold text-brand-teal sm:text-xs">{headerSubtitle}</span>
+              ) : null}
+            </span>
+          </span>
         </button>
         <nav className="flex shrink-0 items-center gap-2">
           {headerActions}
