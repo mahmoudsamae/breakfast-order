@@ -64,6 +64,8 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
   const [manualProductQty, setManualProductQty] = useState({});
   const [repeatOrder, setRepeatOrder] = useState(null);
   const [repeatSuccess, setRepeatSuccess] = useState("");
+  const [canScrollUp, setCanScrollUp] = useState(false);
+  const [canScrollDown, setCanScrollDown] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -94,6 +96,23 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [service, orderListMode, q, apiPrefix]);
+
+  useEffect(() => {
+    if (activeTab !== "orders") return;
+    function updateScrollHints() {
+      const y = window.scrollY;
+      const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+      setCanScrollUp(y > 80);
+      setCanScrollDown(y < max - 80);
+    }
+    updateScrollHints();
+    window.addEventListener("scroll", updateScrollHints, { passive: true });
+    window.addEventListener("resize", updateScrollHints);
+    return () => {
+      window.removeEventListener("scroll", updateScrollHints);
+      window.removeEventListener("resize", updateScrollHints);
+    };
+  }, [activeTab, orders.length, loading, orderListMode]);
 
   async function clearDoneFromStaffList() {
     if (
@@ -626,7 +645,7 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
                   {detailOrder.not_picked_up_note ? ` · ${detailOrder.not_picked_up_note}` : ""}
                 </p>
               ) : null}
-              {detailOrder.status === "pending" && orderListMode === "open" ? (
+              {["pending", "delivered", "not_picked_up"].includes(detailOrder.status) ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -949,6 +968,36 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
         </div>
       ) : null}
 
+      {activeTab === "orders" ? (
+        <div className="pointer-events-none fixed right-2 top-1/2 z-[25] flex -translate-y-1/2 flex-col gap-2 sm:right-3">
+          <button
+            type="button"
+            title="Nach oben"
+            aria-label="Nach oben scrollen"
+            disabled={!canScrollUp}
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-slate-200/90 bg-white text-lg font-bold text-brand-green shadow-md ring-1 ring-slate-100 transition hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-35 sm:h-11 sm:w-11"
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            title="Nach unten"
+            aria-label="Nach unten scrollen"
+            disabled={!canScrollDown}
+            onClick={() =>
+              window.scrollTo({
+                top: document.documentElement.scrollHeight,
+                behavior: "smooth"
+              })
+            }
+            className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-slate-200/90 bg-white text-lg font-bold text-brand-green shadow-md ring-1 ring-slate-100 transition hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-35 sm:h-11 sm:w-11"
+          >
+            ↓
+          </button>
+        </div>
+      ) : null}
+
       <StaffRepeatOrderModal
         open={Boolean(repeatOrder)}
         order={repeatOrder}
@@ -964,6 +1013,7 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
               : "Vorbestellung für morgen wurde angelegt."
           );
           setService("tomorrow");
+          void load();
         }}
       />
         </>
