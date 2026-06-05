@@ -12,6 +12,7 @@ import RegistrationsStaffSection from "@/components/RegistrationsStaffSection";
 import StaffRepeatOrderModal from "@/components/StaffRepeatOrderModal";
 import { SHOW_REGISTRATION_UI } from "@/lib/feature-flags";
 import { printPacklisteDocument } from "@/lib/packliste-print";
+import { getBerlinNow, tomorrowBerlinDate } from "@/lib/order-utils";
 
 function statusLabel(s) {
   if (s === "pending") return "Ausstehend";
@@ -24,6 +25,21 @@ function statusBadgeClass(s) {
   if (s === "delivered") return "border-brand-green/35 bg-brand-green/10 text-brand-green";
   if (s === "not_picked_up") return "border-slate-300 bg-slate-100 text-slate-800";
   return "border-brand-yellow/50 bg-brand-yellow/15 text-brand-green";
+}
+
+function orderPickupYmd(pickupDate) {
+  if (!pickupDate) return "";
+  return String(pickupDate).slice(0, 10);
+}
+
+function isTomorrowPickupOrder(order, tomorrowYmd) {
+  return orderPickupYmd(order?.pickup_date) === tomorrowYmd;
+}
+
+function paymentBadgeClass(paid) {
+  return paid
+    ? "border-brand-green/35 bg-brand-green/10 text-brand-green"
+    : "border-amber-300/80 bg-amber-50 text-amber-900";
 }
 
 /** Fixed rows for the print-only Packliste summary (matches matrix product names). */
@@ -60,8 +76,10 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
   const [manualOpen, setManualOpen] = useState(false);
   const [manualSubmitting, setManualSubmitting] = useState(false);
   const [manualCustomerName, setManualCustomerName] = useState("");
-  const [manualPickupDate, setManualPickupDate] = useState("");
+  const [manualService, setManualService] = useState("today");
+  const [manualPaidNow, setManualPaidNow] = useState(false);
   const [manualProductQty, setManualProductQty] = useState({});
+  const [manualCatalogLoading, setManualCatalogLoading] = useState(false);
   const [repeatOrder, setRepeatOrder] = useState(null);
   const [repeatSuccess, setRepeatSuccess] = useState("");
   const [canScrollUp, setCanScrollUp] = useState(false);
@@ -79,16 +97,11 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
     setOrders(data.orders || []);
     setOrderCounts(data.counts || { open: 0, done: 0 });
     setPickupDateYmd(data.pickupDate || "");
-    setPreparationSummary(
-      data.preparationSummary || {
-        products: [],
-        menus: []
-      }
-    );
-    setPreparationPacklist(data.preparationPacklist || []);
-    setDayMatrixPacklist(data.dayMatrixPacklist || []);
-    setPickupDateLabel(data.pickupDate || "");
-    setCatalog(data.catalog || { products: [], menus: [] });
+    if (data.preparationSummary) setPreparationSummary(data.preparationSummary);
+    if (Array.isArray(data.preparationPacklist)) setPreparationPacklist(data.preparationPacklist);
+    if (Array.isArray(data.dayMatrixPacklist)) setDayMatrixPacklist(data.dayMatrixPacklist);
+    if (data.pickupDate) setPickupDateLabel(data.pickupDate);
+    if (data.catalog) setCatalog(data.catalog);
     setLoading(false);
   }
 
@@ -230,25 +243,51 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
     [prepProductsPrimary]
   );
 
-  function todayIsoLocal() {
-    return new Date().toLocaleDateString("en-CA");
+  const berlinTomorrowYmd = tomorrowBerlinDate();
+
+  async function loadManualCatalog() {
+    setManualCatalogLoading(true);
+    try {
+      const res = await fetch(`${apiPrefix}/catalog`, { cache: "no-store" });
+      const data = await res.json();
+      if (res.ok && data.catalog) {
+        setCatalog(data.catalog);
+      } else if (!res.ok) {
+        setErr(data.error || "Katalog konnte nicht geladen werden.");
+      }
+    } catch {
+      setErr("Katalog konnte nicht geladen werden.");
+    } finally {
+      setManualCatalogLoading(false);
+    }
   }
 
-  function openManualOrder() {
+  async function openManualOrder() {
     setErr("");
-    setManualPickupDate(todayIsoLocal());
+    setManualService("today");
+    setManualPaidNow(false);
     setManualCustomerName("");
     setManualProductQty({});
     setManualOpen(true);
+    if (!(catalog.products || []).length) {
+      await loadManualCatalog();
+    }
   }
 
   async function submitManualOrder() {
     setErr("");
+    if (manualService === "tomorrow" && !manualCustomerName.trim()) {
+      setErr("Für morgen ist ein Name erforderlich.");
+      return;
+    }
     setManualSubmitting(true);
+    const { date: todayBerlin } = getBerlinNow();
+    const pickupDate = manualService === "tomorrow" ? berlinTomorrowYmd : todayBerlin;
     const payload = {
       customerName: manualCustomerName.trim(),
-      pickupDate: manualPickupDate || todayIsoLocal(),
-      productQuantities: manualProductQty
+      pickupDate,
+      productQuantities: manualProductQty,
+      ...(manualService === "tomorrow" ? { paidNow: manualPaidNow } : {})
     };
     const res = await fetch(`${apiPrefix}/orders`, {
       method: "POST",
@@ -262,6 +301,7 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
       return;
     }
     setManualOpen(false);
+    if (manualService === "tomorrow") setService("tomorrow");
     await load();
   }
 
@@ -496,6 +536,13 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
                       {statusLabel(o.status)}
                     </span>
                   ) : null}
+                  {isTomorrowPickupOrder(o, berlinTomorrowYmd) ? (
+                    <span
+                      className={`rounded-lg border px-2 py-0.5 text-[10px] font-bold uppercase sm:text-xs ${paymentBadgeClass(Boolean(o.paid_at))}`}
+                    >
+                      {o.paid_at ? "Bezahlt" : "Offen"}
+                    </span>
+                  ) : null}
                   <span className="inline-flex h-8 items-center rounded-lg border border-brand-teal/30 bg-brand-teal/10 px-2.5 text-[11px] font-bold text-brand-teal">
                     Details
                   </span>
@@ -535,35 +582,90 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
               </button>
             </div>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="mt-4 space-y-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Abholtag</p>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    className={`min-h-11 rounded-xl px-3 py-2.5 text-sm font-bold transition ${manualService === "today" ? "bg-brand-green text-white shadow-sm" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
+                    onClick={() => {
+                      setManualService("today");
+                      setManualPaidNow(false);
+                    }}
+                  >
+                    Heute
+                  </button>
+                  <button
+                    type="button"
+                    className={`min-h-11 rounded-xl px-3 py-2.5 text-sm font-bold transition ${manualService === "tomorrow" ? "bg-brand-green text-white shadow-sm" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
+                    onClick={() => setManualService("tomorrow")}
+                  >
+                    Morgen
+                  </button>
+                </div>
+              </div>
+
               <input
-                className="min-h-11 rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
-                placeholder="Name (optional)"
+                className="min-h-11 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
+                placeholder={manualService === "tomorrow" ? "Name (Pflicht)" : "Name (optional, sonst Vor-Ort-Verkauf)"}
                 value={manualCustomerName}
                 onChange={(e) => setManualCustomerName(e.target.value)}
+                required={manualService === "tomorrow"}
               />
-              <input
-                type="date"
-                className="min-h-11 rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
-                value={manualPickupDate}
-                onChange={(e) => setManualPickupDate(e.target.value)}
-              />
+
+              {manualService === "tomorrow" ? (
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Zahlung</p>
+                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      className={`min-h-11 rounded-xl px-3 py-2.5 text-sm font-bold transition ${manualPaidNow ? "bg-brand-green text-white shadow-sm" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
+                      onClick={() => setManualPaidNow(true)}
+                    >
+                      Jetzt bezahlt
+                    </button>
+                    <button
+                      type="button"
+                      className={`min-h-11 rounded-xl px-3 py-2.5 text-sm font-bold transition ${!manualPaidNow ? "bg-brand-green text-white shadow-sm" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
+                      onClick={() => setManualPaidNow(false)}
+                    >
+                      Bei Abholung zahlen
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="mt-4">
               <div className="rounded-2xl border border-slate-200 p-3">
                 <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Backwaren (Vor-Ort)</p>
                 <div className="mt-2 space-y-2">
+                  {manualCatalogLoading ? (
+                    <p className="text-sm text-slate-500">Produkte werden geladen…</p>
+                  ) : null}
+                  {!manualCatalogLoading && (catalog.products || []).length === 0 ? (
+                    <p className="text-sm leading-relaxed text-slate-500">
+                      Keine Backwaren geladen.{" "}
+                      <button type="button" className="font-semibold text-brand-green underline" onClick={() => void loadManualCatalog()}>
+                        Erneut laden
+                      </button>
+                    </p>
+                  ) : null}
                   {(catalog.products || []).map((p) => (
                     <div key={`mp-${p.id}`} className="flex items-center justify-between gap-3 text-sm">
-                      <span className="min-w-0 flex-1 break-words">{p.name}</span>
+                      <span className="min-w-0 flex-1 break-words font-medium text-slate-900">{p.name}</span>
                       <div className="flex items-center gap-2">
                         <span className="text-slate-500">{formatMoney(p.price)}</span>
                         <input
                           type="number"
                           min={0}
+                          max={10}
                           step={1}
-                          className="w-16 rounded-lg border border-slate-200 px-2 py-1 text-right"
+                          inputMode="numeric"
+                          placeholder="0"
+                          aria-label={`Menge ${p.name}`}
+                          className="min-h-10 w-16 rounded-lg border-2 border-slate-300 bg-white px-2 py-1 text-right text-base font-semibold text-slate-900"
                           value={manualProductQty[String(p.id)] ?? ""}
                           onChange={(e) =>
                             setManualProductQty((s) => ({
@@ -635,6 +737,16 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
               <p className="mt-1 text-sm text-slate-500">
                 Status: <span className="font-semibold text-slate-800">{statusLabel(detailOrder.status)}</span>
               </p>
+              {isTomorrowPickupOrder(detailOrder, berlinTomorrowYmd) ? (
+                <p className="mt-1 text-sm text-slate-500">
+                  Zahlung:{" "}
+                  <span
+                    className={`inline-flex rounded-lg border px-2 py-0.5 text-xs font-bold uppercase ${paymentBadgeClass(Boolean(detailOrder.paid_at))}`}
+                  >
+                    {detailOrder.paid_at ? "Bezahlt" : "Offen"}
+                  </span>
+                </p>
+              ) : null}
               {detailOrder.status === "not_picked_up" && detailOrder.not_picked_up_reason ? (
                 <p className="mt-1 text-xs text-slate-500">
                   Grund:{" "}

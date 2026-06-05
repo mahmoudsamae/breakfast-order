@@ -115,6 +115,7 @@ CREATE TABLE public.orders (
   total_amount numeric(10, 2) NOT NULL DEFAULT 0 CHECK (total_amount >= 0),
   created_at timestamptz NOT NULL DEFAULT now(),
   delivered_at timestamptz,
+  paid_at timestamptz,
   CONSTRAINT orders_customer_name_nonempty CHECK (length(trim(customer_name)) > 0),
   CONSTRAINT orders_branch_pickup_order_number_uq UNIQUE (branch_id, pickup_date, order_number)
 );

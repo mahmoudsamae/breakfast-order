@@ -2,19 +2,20 @@ import { NextResponse } from "next/server";
 import { requireBranchSession } from "@/lib/api-branch-guard";
 import { fetchBranchBySlug } from "@/lib/branch-server";
 import { getSupabaseServerClient } from "@/lib/supabase";
-import { getBerlinNow, MAX_QTY_PER_ITEM } from "@/lib/order-utils";
+import { fetchStaffCatalog } from "@/lib/staff-catalog";
+import { getBerlinNow, MAX_QTY_PER_ITEM, tomorrowBerlinDate } from "@/lib/order-utils";
 import {
   autoHideDoneOrdersBeforeToday,
+  fetchStaffDayMatrixOrders,
   fetchStaffOrderListCounts,
   fetchStaffOrdersForList
 } from "@/lib/staff-orders-list";
 import {
-  DAY_MATRIX_STATUSES,
   mapOrdersWithSummary,
   menuTotalsFromOrders,
   packlistProductsFromOrders,
   pickupDateForService,
-  STAFF_ORDER_SELECT
+  isMissingPaidAtColumn
 } from "@/lib/staff-orders-shared";
 
 export const dynamic = "force-dynamic";
@@ -32,25 +33,8 @@ export async function GET(req, { params }) {
   const listMode = url.searchParams.get("list") === "done" ? "done" : "open";
   const pickupDate = pickupDateForService(url.searchParams.get("service"));
   const branchId = branch.id;
-  const [{ data: productsData, error: productsErr }, { data: menusData, error: menusErr }] = await Promise.all([
-    supabase
-      .from("products")
-      .select("id,name,price,category,image_url,is_active")
-      .eq("branch_id", branchId)
-      .eq("category", "backwaren")
-      .eq("is_active", true)
-      .is("archived_at", null)
-      .order("name", { ascending: true }),
-    supabase
-      .from("menus")
-      .select("id,name,price,image_url,is_active")
-      .eq("branch_id", branchId)
-      .eq("is_active", true)
-      .is("archived_at", null)
-      .order("name", { ascending: true })
-  ]);
-  if (productsErr) return NextResponse.json({ error: productsErr.message }, { status: 500 });
-  if (menusErr) return NextResponse.json({ error: menusErr.message }, { status: 500 });
+  const { catalog, error: catalogErr } = await fetchStaffCatalog(supabase, branchId);
+  if (catalogErr) return NextResponse.json({ error: catalogErr.message }, { status: 500 });
 
   const { date: todayBerlin } = getBerlinNow();
   try {
@@ -82,13 +66,7 @@ export async function GET(req, { params }) {
   };
   const preparationPacklist = normalizedProducts;
 
-  const { data: dayData, error: dayErr } = await supabase
-    .from("orders")
-    .select(STAFF_ORDER_SELECT)
-    .eq("branch_id", branchId)
-    .eq("pickup_date", pickupDate)
-    .in("status", DAY_MATRIX_STATUSES)
-    .order("created_at", { ascending: true });
+  const { data: dayData, error: dayErr } = await fetchStaffDayMatrixOrders(supabase, { branchId, pickupDate });
 
   if (dayErr) return NextResponse.json({ error: dayErr.message }, { status: 500 });
 
@@ -110,10 +88,7 @@ export async function GET(req, { params }) {
     preparationSummary,
     preparationPacklist,
     dayMatrixPacklist,
-    catalog: {
-      products: productsData || [],
-      menus: menusData || []
-    }
+    catalog
   });
 }
 
@@ -127,13 +102,18 @@ export async function POST(req, { params }) {
   try {
     const body = await req.json();
     const customerNameRaw = String(body.customerName || "").trim();
-    const customerName = customerNameRaw || "Vor-Ort-Verkauf";
     const productQuantities = body.productQuantities || {};
     const { date: todayBerlin } = getBerlinNow();
+    const tomorrowBerlin = tomorrowBerlinDate();
     const pickupDate = String(body.pickupDate || todayBerlin);
-    if (pickupDate !== todayBerlin) {
-      return NextResponse.json({ error: "Manuelle Erfassung ist nur für heute möglich." }, { status: 400 });
+    if (pickupDate !== todayBerlin && pickupDate !== tomorrowBerlin) {
+      return NextResponse.json({ error: "Manuelle Erfassung ist nur für heute oder morgen möglich." }, { status: 400 });
     }
+    const isTomorrow = pickupDate === tomorrowBerlin;
+    if (isTomorrow && !customerNameRaw) {
+      return NextResponse.json({ error: "Für morgen ist ein Name erforderlich." }, { status: 400 });
+    }
+    const customerName = customerNameRaw || "Vor-Ort-Verkauf";
 
     const supabase = getSupabaseServerClient();
     const branchId = branch.id;
@@ -171,10 +151,22 @@ export async function POST(req, { params }) {
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+    const orderId = data?.[0]?.order_id ?? null;
+    if (isTomorrow && body.paidNow === true && orderId) {
+      const { error: paidErr } = await supabase
+        .from("orders")
+        .update({ paid_at: new Date().toISOString() })
+        .eq("id", orderId)
+        .eq("branch_id", branchId);
+      if (paidErr && !isMissingPaidAtColumn(paidErr)) {
+        return NextResponse.json({ error: paidErr.message }, { status: 500 });
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       orderNumber: data?.[0]?.order_number ?? null,
-      orderId: data?.[0]?.order_id ?? null
+      orderId
     });
   } catch (e) {
     return NextResponse.json({ error: String(e.message || e) }, { status: 500 });
