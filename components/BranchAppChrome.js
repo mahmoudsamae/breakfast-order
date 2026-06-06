@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import BrandLogoMark from "@/components/BrandLogoMark";
 import CustomerLanguageSwitcher from "@/components/LanguageSwitcher";
 import { useI18n } from "@/components/I18nProvider";
+import { branchShortLabel } from "@/lib/branch-display";
 import { SHOW_REGISTRATION_UI } from "@/lib/feature-flags";
 import { readLastOrderSummary } from "@/lib/last-order-storage";
 
@@ -39,20 +41,9 @@ export default function BranchAppChrome({ branchSlug, branchName, headerActions 
     }
   }
 
-  const titleText = isLanding
-    ? null
-    : isRegister
-      ? "Registrieren"
-      : isOrder
-        ? t("chrome.orderTitle")
-        : branchName || "Standort";
+  const locationLabel = branchShortLabel(branchName, branchSlug);
 
-  const headerSubtitle =
-    isOrder || isRegister
-      ? branchName || null
-      : isLanding
-        ? null
-        : "Frühstück & Team";
+  const contextLabel = isRegister ? "Registrieren" : isOrder ? t("chrome.orderTitle") : null;
 
   useEffect(() => {
     if (!isOrder) {
@@ -75,19 +66,14 @@ export default function BranchAppChrome({ branchSlug, branchName, headerActions 
 
   return (
     <>
-      <header className="mb-5 flex min-h-10 items-center justify-between gap-3 sm:mb-6 sm:gap-4">
-        <button type="button" onClick={tapLogo} className="min-w-0 flex-1 sm:flex-none">
-          <span className="inline-flex max-w-full items-center gap-2.5 rounded-2xl bg-white px-3 py-2 shadow-sm ring-1 ring-slate-200/90 sm:gap-3 sm:px-4 sm:py-2.5">
-            <span
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-green via-brand-yellow to-brand-orange text-xs font-black text-white shadow-sm sm:h-10 sm:w-10 sm:text-sm"
-              aria-hidden
-            >
-              A
-            </span>
-            <span className="min-w-0 truncate text-left leading-tight">
-              <span className="block truncate text-sm font-bold text-slate-900 sm:text-base">{titleText}</span>
-              {headerSubtitle ? (
-                <span className="block truncate text-[11px] font-semibold text-brand-teal sm:text-xs">{headerSubtitle}</span>
+      <header className="mb-5 flex items-center justify-between gap-2 sm:mb-6 sm:gap-4">
+        <button type="button" onClick={tapLogo} className="min-w-0 max-w-[calc(100%-8rem)] shrink text-left sm:max-w-none">
+          <span className="inline-flex items-center gap-2 sm:gap-3">
+            <BrandLogoMark />
+            <span className="min-w-0 leading-tight">
+              <span className="block truncate text-xs font-bold text-brand-orange sm:text-sm md:text-base">{locationLabel}</span>
+              {contextLabel ? (
+                <span className="block truncate text-[10px] font-medium text-slate-500 sm:text-[11px] md:text-xs">{contextLabel}</span>
               ) : null}
             </span>
           </span>

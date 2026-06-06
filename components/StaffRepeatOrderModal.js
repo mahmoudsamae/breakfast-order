@@ -39,6 +39,7 @@ export default function StaffRepeatOrderModal({ open, order, apiPrefix, catalog,
   const [submitting, setSubmitting] = useState(false);
   const [localErr, setLocalErr] = useState("");
   const [addOpen, setAddOpen] = useState(true);
+  const [paidNow, setPaidNow] = useState(false);
   const originalLineKeysRef = useRef(new Set());
 
   const tomorrowYmd = berlinDateWithOffset(1);
@@ -111,6 +112,7 @@ export default function StaffRepeatOrderModal({ open, order, apiPrefix, catalog,
     setLocalErr("");
     setSubmitting(false);
     setAddOpen(true);
+    setPaidNow(false);
   }, [open, order]);
 
   useEffect(() => {
@@ -168,6 +170,7 @@ export default function StaffRepeatOrderModal({ open, order, apiPrefix, catalog,
         body: JSON.stringify({
           sourceOrderId: order.id,
           pickupDate: tomorrowYmd,
+          paidNow,
           lines: active.map((l) => ({
             productId: l.productId,
             menuId: l.menuId,
@@ -296,6 +299,28 @@ export default function StaffRepeatOrderModal({ open, order, apiPrefix, catalog,
           <div className="flex items-center justify-between rounded-2xl bg-slate-900 px-4 py-3 text-white">
             <span className="text-sm font-medium text-white/80">Neue Summe</span>
             <span className="text-lg font-black">{formatMoney(total)}</span>
+          </div>
+
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Zahlung</p>
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                disabled={submitting}
+                className={`min-h-11 rounded-xl px-3 py-2.5 text-sm font-bold transition ${paidNow ? "bg-brand-green text-white shadow-sm" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
+                onClick={() => setPaidNow(true)}
+              >
+                Jetzt bezahlt
+              </button>
+              <button
+                type="button"
+                disabled={submitting}
+                className={`min-h-11 rounded-xl px-3 py-2.5 text-sm font-bold transition ${!paidNow ? "bg-brand-green text-white shadow-sm" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
+                onClick={() => setPaidNow(false)}
+              >
+                Bei Abholung zahlen
+              </button>
+            </div>
           </div>
 
           {localErr ? (

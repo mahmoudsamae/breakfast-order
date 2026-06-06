@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireBranchSession } from "@/lib/api-branch-guard";
 import { fetchBranchBySlug } from "@/lib/branch-server";
 import { createStaffRepeatOrder } from "@/lib/staff-repeat-order";
+import { isMissingPaidAtColumn } from "@/lib/staff-orders-shared";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { tomorrowBerlinDate } from "@/lib/order-utils";
 
@@ -35,6 +36,17 @@ export async function POST(req, { params }) {
       lines,
       pickupDate
     });
+
+    if (body.paidNow === true && result.orderId) {
+      const { error: paidErr } = await supabase
+        .from("orders")
+        .update({ paid_at: new Date().toISOString() })
+        .eq("id", result.orderId)
+        .eq("branch_id", branch.id);
+      if (paidErr && !isMissingPaidAtColumn(paidErr)) {
+        return NextResponse.json({ error: paidErr.message }, { status: 500 });
+      }
+    }
 
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
