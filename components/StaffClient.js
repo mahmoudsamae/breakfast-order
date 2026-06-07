@@ -32,8 +32,11 @@ function orderPickupYmd(pickupDate) {
   return String(pickupDate).slice(0, 10);
 }
 
-function isTomorrowPickupOrder(order, tomorrowYmd) {
-  return orderPickupYmd(order?.pickup_date) === tomorrowYmd;
+/** Prepaid always; unpaid only while pickup is still tomorrow. */
+function orderPaymentLabel(order, tomorrowYmd) {
+  if (order?.paid_at) return "paid";
+  if (orderPickupYmd(order?.pickup_date) === tomorrowYmd) return "open";
+  return null;
 }
 
 function paymentBadgeClass(paid) {
@@ -80,6 +83,7 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
   const [manualPaidNow, setManualPaidNow] = useState(false);
   const [manualProductQty, setManualProductQty] = useState({});
   const [manualCatalogLoading, setManualCatalogLoading] = useState(false);
+  const [manualSuccess, setManualSuccess] = useState(null);
   const [repeatOrder, setRepeatOrder] = useState(null);
   const [repeatSuccess, setRepeatSuccess] = useState("");
   const [canScrollUp, setCanScrollUp] = useState(false);
@@ -199,6 +203,7 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
   }, [confirmNotPickedUpId]);
 
   const detailOrder = detailId ? orders.find((o) => o.id === detailId) : null;
+  const detailPaymentLabel = detailOrder ? orderPaymentLabel(detailOrder, berlinTomorrowYmd) : null;
   const detailNameParts = useMemo(
     () => (detailOrder ? parseEigenesMenueFromCustomerName(detailOrder.customer_name) : { cleanName: "", groups: [] }),
     [detailOrder]
@@ -301,6 +306,12 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
       return;
     }
     setManualOpen(false);
+    setManualSuccess({
+      orderNumber: data.orderNumber ?? null,
+      customerName: manualCustomerName.trim() || "Vor-Ort-Verkauf",
+      pickupDay: manualService,
+      paidNow: manualService === "tomorrow" && manualPaidNow
+    });
     if (manualService === "tomorrow") setService("tomorrow");
     await load();
   }
@@ -516,12 +527,19 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
       ) : null}
 
       <ul className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
-        {orders.map((o) => (
+        {orders.map((o) => {
+          const paymentLabel = orderPaymentLabel(o, berlinTomorrowYmd);
+          const isPrepaid = paymentLabel === "paid";
+          return (
           <li key={o.id}>
             <button
               type="button"
               onClick={() => setDetailId(o.id)}
-              className="flex min-h-[220px] w-full flex-col rounded-2xl border border-slate-200/90 bg-white px-4 py-4 text-left shadow-sm ring-1 ring-slate-100 transition hover:shadow-md hover:ring-brand-teal/40 active:scale-[0.99] sm:px-5 sm:py-4"
+              className={`flex min-h-[220px] w-full flex-col rounded-2xl border px-4 py-4 text-left shadow-sm ring-1 transition hover:shadow-md active:scale-[0.99] sm:px-5 sm:py-4 ${
+                isPrepaid
+                  ? "border-brand-green/40 bg-brand-green/[0.07] ring-brand-green/25 hover:ring-brand-green/40"
+                  : "border-slate-200/90 bg-white ring-slate-100 hover:ring-brand-teal/40"
+              }`}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
@@ -536,11 +554,11 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
                       {statusLabel(o.status)}
                     </span>
                   ) : null}
-                  {isTomorrowPickupOrder(o, berlinTomorrowYmd) ? (
+                  {paymentLabel ? (
                     <span
-                      className={`rounded-lg border px-2 py-0.5 text-[10px] font-bold uppercase sm:text-xs ${paymentBadgeClass(Boolean(o.paid_at))}`}
+                      className={`rounded-lg border px-2 py-0.5 text-[10px] font-bold uppercase sm:text-xs ${paymentBadgeClass(paymentLabel === "paid")}`}
                     >
-                      {o.paid_at ? "Bezahlt" : "Offen"}
+                      {paymentLabel === "paid" ? "Bezahlt" : "Offen"}
                     </span>
                   ) : null}
                   <span className="inline-flex h-8 items-center rounded-lg border border-brand-teal/30 bg-brand-teal/10 px-2.5 text-[11px] font-bold text-brand-teal">
@@ -561,7 +579,8 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
               <p className="mt-auto pt-3 text-[11px] text-slate-400">Tippen für alle Positionen</p>
             </button>
           </li>
-        ))}
+          );
+        })}
       </ul>
 
       {manualOpen ? (
@@ -707,6 +726,48 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
         </div>
       ) : null}
 
+      {manualSuccess ? (
+        <div
+          className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/60 p-0 sm:items-center sm:p-4"
+          onClick={() => setManualSuccess(null)}
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="manual-success-title"
+            className="w-full max-w-sm rounded-t-3xl bg-white p-6 text-center shadow-2xl sm:rounded-3xl sm:p-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p id="manual-success-title" className="text-sm font-bold uppercase tracking-[0.16em] text-brand-green">
+              Bestellung gespeichert
+            </p>
+            <p className="mt-2 text-xs font-medium text-slate-500">Bestellnummer für den Gast</p>
+            <p className="mt-3 text-6xl font-black tabular-nums leading-none tracking-tight text-brand-green sm:text-7xl">
+              #{manualSuccess.orderNumber ?? "—"}
+            </p>
+            <p className="mt-4 break-words text-lg font-bold text-slate-900">{manualSuccess.customerName}</p>
+            {manualSuccess.pickupDay === "tomorrow" ? (
+              <p className="mt-2 text-sm text-slate-600">Abholung: morgen</p>
+            ) : null}
+            {manualSuccess.paidNow ? (
+              <p className="mt-3">
+                <span className={`inline-flex rounded-lg border px-2.5 py-1 text-xs font-bold uppercase ${paymentBadgeClass(true)}`}>
+                  Bezahlt
+                </span>
+              </p>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setManualSuccess(null)}
+              className="mt-6 min-h-12 w-full rounded-2xl bg-brand-green px-4 py-3 text-base font-bold text-white hover:brightness-95"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {detailOrder ? (
         <div
           className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/55 p-0 sm:items-center sm:p-4"
@@ -737,13 +798,13 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
               <p className="mt-1 text-sm text-slate-500">
                 Status: <span className="font-semibold text-slate-800">{statusLabel(detailOrder.status)}</span>
               </p>
-              {isTomorrowPickupOrder(detailOrder, berlinTomorrowYmd) ? (
+              {detailPaymentLabel ? (
                 <p className="mt-1 text-sm text-slate-500">
                   Zahlung:{" "}
                   <span
-                    className={`inline-flex rounded-lg border px-2 py-0.5 text-xs font-bold uppercase ${paymentBadgeClass(Boolean(detailOrder.paid_at))}`}
+                    className={`inline-flex rounded-lg border px-2 py-0.5 text-xs font-bold uppercase ${paymentBadgeClass(detailPaymentLabel === "paid")}`}
                   >
-                    {detailOrder.paid_at ? "Bezahlt" : "Offen"}
+                    {detailPaymentLabel === "paid" ? "Bezahlt" : "Offen"}
                   </span>
                 </p>
               ) : null}
