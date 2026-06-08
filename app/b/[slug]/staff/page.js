@@ -2,6 +2,7 @@ import Link from "next/link";
 import BranchAppChrome from "@/components/BranchAppChrome";
 import StaffClient from "@/components/StaffClient";
 import { fetchBranchBySlug } from "@/lib/branch-server";
+import { getRegistrationEnabled } from "@/lib/platform-settings";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ export default async function BranchStaffPage({ params }) {
 
   const slug = branch.slug;
   const apiPrefix = `/api/branches/${slug}/staff`;
+  const showRegistration = await getRegistrationEnabled();
 
   return (
     <div className="fb-page-branch">
@@ -24,14 +26,17 @@ export default async function BranchStaffPage({ params }) {
       <BranchAppChrome
         branchSlug={slug}
         branchName={branch.name}
+        showRegistration={showRegistration}
         headerActions={
           <>
-            <Link
-              href={`/b/${slug}/register`}
-              className="min-h-10 shrink-0 rounded-full bg-white px-3 py-2 text-[11px] font-bold text-slate-800 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50 sm:min-h-9 sm:px-3.5 sm:py-1.5 sm:text-xs"
-            >
-              Zur Registrierung
-            </Link>
+            {showRegistration ? (
+              <Link
+                href={`/b/${slug}/register`}
+                className="min-h-10 shrink-0 rounded-full bg-white px-3 py-2 text-[11px] font-bold text-slate-800 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50 sm:min-h-9 sm:px-3.5 sm:py-1.5 sm:text-xs"
+              >
+                Zur Registrierung
+              </Link>
+            ) : null}
             <Link
               href={`/b/${slug}/order`}
               className="min-h-10 shrink-0 rounded-full bg-white px-3 py-2 text-[11px] font-bold text-slate-800 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50 sm:min-h-9 sm:px-3.5 sm:py-1.5 sm:text-xs"
@@ -41,7 +46,7 @@ export default async function BranchStaffPage({ params }) {
           </>
         }
       />
-      <StaffClient apiPrefix={apiPrefix} />
+      <StaffClient apiPrefix={apiPrefix} showRegistration={showRegistration} />
     </div>
   );
 }

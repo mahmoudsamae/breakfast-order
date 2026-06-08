@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireBranchSession } from "@/lib/api-branch-guard";
 import { fetchBranchBySlug } from "@/lib/branch-server";
+import { getRegistrationEnabled } from "@/lib/platform-settings";
 import { getSupabaseServerClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,9 @@ const ANALYTICS_DONE_SELECT =
 export async function GET(_, { params }) {
   const { error: authErr } = await requireBranchSession(params.slug, ["team", "admin"]);
   if (authErr) return authErr;
+  if (!(await getRegistrationEnabled())) {
+    return NextResponse.json({ error: "Registrierung ist deaktiviert." }, { status: 403 });
+  }
 
   const { branch, error: brErr } = await fetchBranchBySlug(params.slug);
   if (brErr || !branch) return NextResponse.json({ error: "Standort nicht gefunden." }, { status: 404 });

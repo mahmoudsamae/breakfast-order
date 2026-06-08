@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { CardImageMedia, CardImageMediaPreview } from "@/components/CardImageMedia";
 import { formatMoney } from "@/lib/format-money";
-import { SHOW_REGISTRATION_UI } from "@/lib/feature-flags";
 import { NOT_PICKED_UP_REASON_OPTIONS } from "@/lib/not-picked-up-reasons";
 import {
   normalizeProductCategorySlug,
@@ -122,7 +121,7 @@ function NotPickedUpDetailsModal({ rows, onClose }) {
   );
 }
 
-export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = "", branchSlug = "" }) {
+export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = "", branchSlug = "", showRegistration = false }) {
   const [tab, setTab] = useState("overview");
   const [summary, setSummary] = useState(null);
   const [products, setProducts] = useState([]);
@@ -301,7 +300,7 @@ export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = ""
         }
         actions={
           <div className="flex flex-wrap gap-2">
-            {SHOW_REGISTRATION_UI ? (
+            {showRegistration ? (
               <Link
                 href={branchSlug ? `/b/${branchSlug}/register` : "/"}
                 className="min-h-11 rounded-2xl bg-white/15 px-4 py-2.5 text-sm font-bold text-white ring-1 ring-white/30"
@@ -362,7 +361,7 @@ export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = ""
       {tab === "overview" && summary ? (
         <AdminOverviewInsights
           summary={summary}
-          showRegistration={SHOW_REGISTRATION_UI}
+          showRegistration={showRegistration}
           onOpenNotPickedUp={() => setNotPickedUpOpen(true)}
         />
       ) : null}

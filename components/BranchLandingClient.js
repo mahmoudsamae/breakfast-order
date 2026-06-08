@@ -2,10 +2,8 @@
 
 import Link from "next/link";
 import BranchAppChrome from "@/components/BranchAppChrome";
-import { SHOW_REGISTRATION_UI } from "@/lib/feature-flags";
-
 /** Standort-Startseite — fest auf Deutsch (Sprachwahl nur auf der Bestellseite). */
-export default function BranchLandingClient({ branchSlug, branchName }) {
+export default function BranchLandingClient({ branchSlug, branchName, showRegistration = false }) {
   const base = `/b/${branchSlug}`;
 
   return (
@@ -24,7 +22,7 @@ export default function BranchLandingClient({ branchSlug, branchName }) {
           >
             Frühstück bestellen
           </Link>
-          {SHOW_REGISTRATION_UI ? (
+          {showRegistration ? (
             <Link
               href={`${base}/register`}
               className="fb-btn-secondary inline-flex min-h-[3.25rem] items-center justify-center px-6 py-4 text-center text-base font-bold shadow-sm sm:min-h-[3.5rem] sm:text-lg"

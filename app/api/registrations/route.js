@@ -3,6 +3,7 @@ import { fetchBranchBySlug } from "@/lib/branch-server";
 import { normalizeBranchSlug } from "@/lib/branch-slug";
 import { buildRegistrationAnalyticsInsert } from "@/lib/registration-analytics-payload";
 import { hasTruthyText, stayNightsFromIsoDates, trimOrNull } from "@/lib/registration-helpers";
+import { getRegistrationEnabled } from "@/lib/platform-settings";
 import { getSupabaseServerClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +37,10 @@ function composeNotesWithNationality(notes, nationality) {
 /** Public: create intake + analytics for an active branch. */
 export async function POST(req) {
   try {
+    if (!(await getRegistrationEnabled())) {
+      return NextResponse.json({ error: "Registrierung ist derzeit deaktiviert." }, { status: 403 });
+    }
+
     let body;
     try {
       body = await req.json();

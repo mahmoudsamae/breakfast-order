@@ -2,6 +2,7 @@ import Link from "next/link";
 import BranchAppChrome from "@/components/BranchAppChrome";
 import AdminClient from "@/components/AdminClient";
 import { fetchBranchBySlug } from "@/lib/branch-server";
+import { getRegistrationEnabled } from "@/lib/platform-settings";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ export default async function BranchAdminPage({ params }) {
 
   const slug = branch.slug;
   const apiPrefix = `/api/branches/${slug}/admin`;
+  const showRegistration = await getRegistrationEnabled();
 
   return (
     <div className="fb-page-branch bg-gradient-to-b from-brand-yellow/10 via-slate-50 to-slate-50">
@@ -21,8 +23,8 @@ export default async function BranchAdminPage({ params }) {
           Interner Bereich
         </Link>
       </div>
-      <BranchAppChrome branchSlug={slug} branchName={branch.name} />
-      <AdminClient apiPrefix={apiPrefix} branchLabel={branch.name} branchSlug={slug} />
+      <BranchAppChrome branchSlug={slug} branchName={branch.name} showRegistration={showRegistration} />
+      <AdminClient apiPrefix={apiPrefix} branchLabel={branch.name} branchSlug={slug} showRegistration={showRegistration} />
     </div>
   );
 }

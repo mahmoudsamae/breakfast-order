@@ -4,7 +4,7 @@ import BranchAppChrome from "@/components/BranchAppChrome";
 import RegisterClient from "@/components/RegisterClient";
 import RegistrationHiddenNotice from "@/components/RegistrationHiddenNotice";
 import { fetchBranchBySlug } from "@/lib/branch-server";
-import { SHOW_REGISTRATION_UI } from "@/lib/feature-flags";
+import { getRegistrationEnabled } from "@/lib/platform-settings";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -14,14 +14,15 @@ export default async function BranchRegisterPage({ params }) {
   if (error || !branch) notFound();
 
   const slug = branch.slug;
+  const showRegistration = await getRegistrationEnabled();
 
-  if (!SHOW_REGISTRATION_UI) {
+  if (!showRegistration) {
     return <RegistrationHiddenNotice branchSlug={slug} branchName={branch.name} />;
   }
 
   return (
     <div className="fb-page-order">
-      <BranchAppChrome branchSlug={slug} branchName={branch.name} />
+      <BranchAppChrome branchSlug={slug} branchName={branch.name} showRegistration={showRegistration} />
       <div className="mb-6">
         <div className="fb-hero">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/75">Aufenthalt</p>

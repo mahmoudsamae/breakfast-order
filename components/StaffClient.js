@@ -10,7 +10,6 @@ import {
 } from "@/lib/not-picked-up-reasons";
 import RegistrationsStaffSection from "@/components/RegistrationsStaffSection";
 import StaffRepeatOrderModal from "@/components/StaffRepeatOrderModal";
-import { SHOW_REGISTRATION_UI } from "@/lib/feature-flags";
 import { printPacklisteDocument } from "@/lib/packliste-print";
 import { getBerlinNow, tomorrowBerlinDate } from "@/lib/order-utils";
 
@@ -53,7 +52,7 @@ const PACKLISTE_PRINT_SUMMARY_PRODUCTS = [
   "Buttercroissant"
 ];
 
-export default function StaffClient({ apiPrefix = "/api/staff" }) {
+export default function StaffClient({ apiPrefix = "/api/staff", showRegistration = false }) {
   const packlistePrintInFlightRef = useRef(false);
   const [activeTab, setActiveTab] = useState("orders");
   const [service, setService] = useState("today");
@@ -347,7 +346,7 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
         ) : null}
       </section>
 
-      {SHOW_REGISTRATION_UI ? (
+      {showRegistration ? (
         <section className="rounded-3xl border border-slate-200/90 bg-white p-3 shadow-sm sm:p-4">
           <div className="grid grid-cols-2 gap-2">
             <button
@@ -368,10 +367,10 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
         </section>
       ) : null}
 
-      {SHOW_REGISTRATION_UI && activeTab === "registrations" ? (
+      {showRegistration && activeTab === "registrations" ? (
         <RegistrationsStaffSection apiPrefix={apiPrefix} />
       ) : null}
-      {activeTab === "orders" || !SHOW_REGISTRATION_UI ? (
+      {activeTab === "orders" || !showRegistration ? (
         <>
           <section className="rounded-3xl bg-gradient-to-br from-brand-teal to-brand-green p-4 text-white shadow-md sm:p-5">
             <p className="text-sm font-semibold">Bestellansicht</p>

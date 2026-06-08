@@ -7,14 +7,13 @@ import BrandLogoMark from "@/components/BrandLogoMark";
 import CustomerLanguageSwitcher from "@/components/LanguageSwitcher";
 import { useI18n } from "@/components/I18nProvider";
 import { branchShortLabel } from "@/lib/branch-display";
-import { SHOW_REGISTRATION_UI } from "@/lib/feature-flags";
 import { readLastOrderSummary } from "@/lib/last-order-storage";
 
 /**
  * Public branch header: 3-tap opens internal login (UI only).
  * Language switcher lives on the guest order page only.
  */
-export default function BranchAppChrome({ branchSlug, branchName, headerActions = null, variant }) {
+export default function BranchAppChrome({ branchSlug, branchName, headerActions = null, variant, showRegistration = false }) {
   const pathname = usePathname();
   const { t } = useI18n();
   const base = `/b/${branchSlug}`;
@@ -22,7 +21,7 @@ export default function BranchAppChrome({ branchSlug, branchName, headerActions 
   const registerPath = `${base}/register`;
   const isLanding = variant === "landing" || pathname === base;
   const isOrder = pathname === orderPath;
-  const isRegister = SHOW_REGISTRATION_UI && pathname === registerPath;
+  const isRegister = showRegistration && pathname === registerPath;
 
   const [hasLastOrder, setHasLastOrder] = useState(false);
   const [open, setOpen] = useState(false);

@@ -1,10 +1,13 @@
 import RootChangePasswordForm from "@/components/internal/RootChangePasswordForm";
+import RootRegistrationToggle from "@/components/internal/RootRegistrationToggle";
 import RootSectionTitle from "@/components/internal/RootSectionTitle";
+import { getRegistrationEnabled } from "@/lib/platform-settings";
 import { getSupabaseServerClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
 export default async function RootDashboardPage() {
+  const registrationEnabled = await getRegistrationEnabled();
   const supabase = getSupabaseServerClient();
   const [{ count: branchCount }, { count: credCount }] = await Promise.all([
     supabase.from("branches").select("*", { count: "exact", head: true }),
@@ -17,6 +20,8 @@ export default async function RootDashboardPage() {
         title="Übersicht"
         subtitle="Standorte und Branch-Konten verwalten — gleiche Oberfläche wie die Team-Ansichten, zentral für den Betrieb."
       />
+
+      <RootRegistrationToggle initialEnabled={registrationEnabled} />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="fb-hero">
