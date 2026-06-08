@@ -202,6 +202,7 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [confirmNotPickedUpId]);
 
+  const berlinTomorrowYmd = tomorrowBerlinDate();
   const detailOrder = detailId ? orders.find((o) => o.id === detailId) : null;
   const detailPaymentLabel = detailOrder ? orderPaymentLabel(detailOrder, berlinTomorrowYmd) : null;
   const detailNameParts = useMemo(
@@ -247,8 +248,6 @@ export default function StaffClient({ apiPrefix = "/api/staff" }) {
     () => prepProductsPrimary.reduce((a, r) => a + Number(r.qty || 0), 0),
     [prepProductsPrimary]
   );
-
-  const berlinTomorrowYmd = tomorrowBerlinDate();
 
   async function loadManualCatalog() {
     setManualCatalogLoading(true);
