@@ -180,7 +180,7 @@ export default function StaffRepeatOrderModal({ open, order, apiPrefix, catalog,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Vorbestellung fehlgeschlagen.");
-      onCreated?.(data);
+      onCreated?.({ ...data, paidNow, customerName: cleanName });
       onClose();
     } catch (e) {
       setLocalErr(String(e.message || e));

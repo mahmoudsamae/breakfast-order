@@ -10,6 +10,7 @@ import {
 } from "@/lib/not-picked-up-reasons";
 import RegistrationsStaffSection from "@/components/RegistrationsStaffSection";
 import StaffRepeatOrderModal from "@/components/StaffRepeatOrderModal";
+import StaffOrderOverridePanel from "@/components/StaffOrderOverridePanel";
 import { printPacklisteDocument } from "@/lib/packliste-print";
 import { getBerlinNow, tomorrowBerlinDate } from "@/lib/order-utils";
 
@@ -31,10 +32,11 @@ function orderPickupYmd(pickupDate) {
   return String(pickupDate).slice(0, 10);
 }
 
-/** Prepaid always; unpaid only while pickup is still tomorrow. */
-function orderPaymentLabel(order, tomorrowYmd) {
+/** Prepaid always; unpaid only while pickup is still tomorrow or today. */
+function orderPaymentLabel(order, tomorrowYmd, todayYmd) {
   if (order?.paid_at) return "paid";
-  if (orderPickupYmd(order?.pickup_date) === tomorrowYmd) return "open";
+  const pickup = orderPickupYmd(order?.pickup_date);
+  if (pickup === tomorrowYmd || pickup === todayYmd) return "open";
   return null;
 }
 
@@ -84,9 +86,13 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
   const [manualCatalogLoading, setManualCatalogLoading] = useState(false);
   const [manualSuccess, setManualSuccess] = useState(null);
   const [repeatOrder, setRepeatOrder] = useState(null);
-  const [repeatSuccess, setRepeatSuccess] = useState("");
+  const [repeatSuccess, setRepeatSuccess] = useState(null);
   const [canScrollUp, setCanScrollUp] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(false);
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [overrideUnlocked, setOverrideUnlocked] = useState(false);
+  const orderNumberTaps = useRef(0);
+  const orderNumberTapTimer = useRef(null);
 
   async function load() {
     setLoading(true);
@@ -202,8 +208,27 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
   }, [confirmNotPickedUpId]);
 
   const berlinTomorrowYmd = tomorrowBerlinDate();
+  const { date: berlinTodayYmd } = getBerlinNow();
   const detailOrder = detailId ? orders.find((o) => o.id === detailId) : null;
-  const detailPaymentLabel = detailOrder ? orderPaymentLabel(detailOrder, berlinTomorrowYmd) : null;
+  const detailPaymentLabel = detailOrder ? orderPaymentLabel(detailOrder, berlinTomorrowYmd, berlinTodayYmd) : null;
+
+  function tapOrderNumberForOverride() {
+    orderNumberTaps.current += 1;
+    if (orderNumberTapTimer.current) clearTimeout(orderNumberTapTimer.current);
+    orderNumberTapTimer.current = setTimeout(() => {
+      orderNumberTaps.current = 0;
+    }, 1200);
+    if (orderNumberTaps.current >= 5) {
+      orderNumberTaps.current = 0;
+      setOverrideOpen(true);
+    }
+  }
+
+  function closeDetail() {
+    setDetailId(null);
+    setOverrideOpen(false);
+  }
+
   const detailNameParts = useMemo(
     () => (detailOrder ? parseEigenesMenueFromCustomerName(detailOrder.customer_name) : { cleanName: "", groups: [] }),
     [detailOrder]
@@ -329,49 +354,52 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
 
   return (
     <div className="space-y-5 pb-6 sm:space-y-6 sm:pb-8">
-      <section className="fb-hero">
-        <p className="text-xs uppercase tracking-[0.2em] text-white/75">Team</p>
-        <h1 className="mt-2 text-xl font-bold leading-tight sm:text-2xl">Staff-Dashboard</h1>
-        <p className="mt-2 text-sm leading-snug text-white/90">Erleichtert die Abläufe für Team und Gäste.</p>
-        {activeTab === "orders" ? (
-          <div className="mt-4">
-            <button
-              type="button"
-              onClick={openManualOrder}
-              className="min-h-11 rounded-2xl bg-white px-4 py-2.5 text-sm font-bold text-brand-green shadow-md hover:bg-white/95"
-            >
-              + Vor-Ort-Verkauf
-            </button>
+      <section className="fb-hero !p-4 sm:!p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-white/75 sm:text-xs">Team</p>
+            <h1 className="mt-0.5 text-lg font-bold leading-tight sm:text-xl">Staff-Dashboard</h1>
           </div>
-        ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            {showRegistration ? (
+              activeTab === "registrations" ? (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("orders")}
+                  className="min-h-10 rounded-2xl bg-white/20 px-3.5 py-2 text-sm font-bold text-white ring-1 ring-white/30 hover:bg-white/30"
+                >
+                  Bestellungen
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("registrations")}
+                  className="min-h-10 rounded-2xl bg-white/20 px-3.5 py-2 text-sm font-bold text-white ring-1 ring-white/30 hover:bg-white/30"
+                >
+                  Registrierungen
+                </button>
+              )
+            ) : null}
+            {activeTab === "orders" ? (
+              <button
+                type="button"
+                onClick={openManualOrder}
+                className="min-h-10 rounded-2xl bg-white px-3.5 py-2 text-sm font-bold text-brand-green shadow-md hover:bg-white/95"
+              >
+                + Vor-Ort-Verkauf
+              </button>
+            ) : null}
+          </div>
+        </div>
       </section>
-
-      {showRegistration ? (
-        <section className="rounded-3xl border border-slate-200/90 bg-white p-3 shadow-sm sm:p-4">
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setActiveTab("orders")}
-              className={`min-h-11 rounded-2xl px-3 py-2 text-sm font-bold transition ${activeTab === "orders" ? "bg-brand-green text-white shadow-sm" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
-            >
-              Bestellungen
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("registrations")}
-              className={`min-h-11 rounded-2xl px-3 py-2 text-sm font-bold transition ${activeTab === "registrations" ? "bg-brand-green text-white shadow-sm" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
-            >
-              Registrierungen
-            </button>
-          </div>
-        </section>
-      ) : null}
 
       {showRegistration && activeTab === "registrations" ? (
         <RegistrationsStaffSection apiPrefix={apiPrefix} />
       ) : null}
       {activeTab === "orders" || !showRegistration ? (
         <>
+          <div className="staff-dashboard-split space-y-5 xl:grid xl:grid-cols-[minmax(280px,22rem)_1fr] xl:items-start xl:gap-6 xl:space-y-0">
+            <div className="staff-dashboard-side space-y-5 xl:sticky xl:top-4 xl:space-y-5">
           <section className="rounded-3xl bg-gradient-to-br from-brand-teal to-brand-green p-4 text-white shadow-md sm:p-5">
             <p className="text-sm font-semibold">Bestellansicht</p>
             <p className="mt-1 text-xs text-white/90">Schnell erfassen, ausliefern und im Blick behalten.</p>
@@ -393,7 +421,7 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
             </div>
           </section>
 
-          <section className="rounded-3xl border border-brand-yellow/40 bg-white p-4 shadow-md ring-1 ring-slate-200/90 sm:p-5">
+          <section className="rounded-3xl border border-brand-yellow/40 bg-white p-4 shadow-md ring-1 ring-slate-200/90 sm:p-5 xl:max-h-[calc(100dvh-5rem)] xl:overflow-y-auto xl:overscroll-y-contain">
             <h2 className="text-base font-bold leading-snug text-slate-900">
               {service === "tomorrow" ? "Was morgen vorbereitet werden muss" : "Was heute vorbereitet werden muss"}
             </h2>
@@ -409,7 +437,7 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
             {prepProductsPrimary.length > 0 ? (
               <div className="mt-4">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Backwaren & Extras (Stück)</p>
-                <ul className="mt-2 space-y-2">
+                <ul className="mt-2 space-y-2 lg:grid lg:grid-cols-2 lg:gap-2 lg:space-y-0 xl:grid-cols-1 xl:space-y-2">
                   {prepProductsPrimary.map((row) => (
                     <li key={row.name} className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2">
                       <div className="flex items-center justify-between gap-3 text-sm">
@@ -461,43 +489,45 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
                 </ul>
               </div>
             ) : null}
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="mt-4 flex flex-wrap items-stretch gap-2">
               <button
                 type="button"
                 onClick={() => setPackOpen(true)}
-                className="min-h-10 shrink-0 rounded-xl bg-brand-teal px-3.5 py-2 text-xs font-bold text-white hover:brightness-95 sm:text-sm"
+                className="min-h-10 min-w-[9.5rem] flex-1 rounded-xl bg-brand-teal px-3 py-2 text-xs font-bold text-white hover:brightness-95 sm:text-sm"
               >
                 Packliste anzeigen
               </button>
-              <div className="ml-auto flex shrink-0 items-center gap-1.5">
+              <div className="flex min-h-10 min-w-[11rem] flex-1 items-center gap-1 rounded-xl bg-slate-100 p-1">
                 <button
                   type="button"
                   onClick={() => setOrderListMode("open")}
-                  className={`min-h-9 rounded-lg px-2.5 py-1.5 text-xs font-bold transition sm:px-3 sm:text-sm ${orderListMode === "open" ? "bg-brand-green text-white shadow-sm" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
+                  className={`min-h-8 flex-1 rounded-lg px-2 py-1.5 text-xs font-bold transition sm:text-sm ${orderListMode === "open" ? "bg-brand-green text-white shadow-sm" : "text-slate-700 hover:bg-white/80"}`}
                 >
                   Offen ({orderCounts.open})
                 </button>
                 <button
                   type="button"
                   onClick={() => setOrderListMode("done")}
-                  className={`min-h-9 rounded-lg px-2.5 py-1.5 text-xs font-bold transition sm:px-3 sm:text-sm ${orderListMode === "done" ? "bg-brand-green text-white shadow-sm" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
+                  className={`min-h-8 flex-1 rounded-lg px-2 py-1.5 text-xs font-bold transition sm:text-sm ${orderListMode === "done" ? "bg-brand-green text-white shadow-sm" : "text-slate-700 hover:bg-white/80"}`}
                 >
                   Erledigt ({orderCounts.done})
                 </button>
-                {orderListMode === "done" && orders.length > 0 ? (
-                  <button
-                    type="button"
-                    onClick={clearDoneFromStaffList}
-                    disabled={clearingDone}
-                    className="min-h-9 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-3 sm:text-sm"
-                  >
-                    {clearingDone ? "…" : "Leeren"}
-                  </button>
-                ) : null}
               </div>
+              {orderListMode === "done" && orders.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={clearDoneFromStaffList}
+                  disabled={clearingDone}
+                  className="min-h-10 shrink-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:text-sm"
+                >
+                  {clearingDone ? "…" : "Leeren"}
+                </button>
+              ) : null}
             </div>
           </section>
+            </div>
 
+            <div className="staff-dashboard-main min-w-0 space-y-5">
           <input
             className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 shadow-sm outline-none placeholder:text-slate-400 focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/25 sm:py-3.5 sm:text-sm"
             placeholder="Suche nach Name oder Bestellnummer"
@@ -508,7 +538,43 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm leading-relaxed text-red-800 shadow-sm break-words">{err}</div>
       ) : null}
       {repeatSuccess ? (
-        <div className="fb-alert-success break-words">{repeatSuccess}</div>
+        <div
+          className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/60 p-0 sm:items-center sm:p-4"
+          onClick={() => setRepeatSuccess(null)}
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="repeat-success-title"
+            className="w-full max-w-sm rounded-t-3xl bg-white p-6 text-center shadow-2xl sm:rounded-3xl sm:p-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p id="repeat-success-title" className="text-sm font-bold uppercase tracking-[0.16em] text-brand-green">
+              Vorbestellung gespeichert
+            </p>
+            <p className="mt-2 text-xs font-medium text-slate-500">Bestellnummer für morgen</p>
+            <p className="mt-3 text-6xl font-black tabular-nums leading-none tracking-tight text-brand-green sm:text-7xl">
+              #{repeatSuccess.orderNumber ?? "—"}
+            </p>
+            <p className="mt-4 break-words text-lg font-bold text-slate-900">{repeatSuccess.customerName}</p>
+            <p className="mt-2 text-sm text-slate-600">Abholung: morgen</p>
+            {repeatSuccess.paidNow ? (
+              <p className="mt-3">
+                <span className={`inline-flex rounded-lg border px-2.5 py-1 text-xs font-bold uppercase ${paymentBadgeClass(true)}`}>
+                  Bezahlt
+                </span>
+              </p>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setRepeatSuccess(null)}
+              className="mt-6 min-h-12 w-full rounded-2xl bg-brand-green px-4 py-3 text-base font-bold text-white hover:brightness-95"
+            >
+              OK
+            </button>
+          </div>
+        </div>
       ) : null}
       {loading ? (
         <p className="text-sm font-medium text-slate-600" aria-live="polite">
@@ -524,9 +590,9 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
         </div>
       ) : null}
 
-      <ul className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+      <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3">
         {orders.map((o) => {
-          const paymentLabel = orderPaymentLabel(o, berlinTomorrowYmd);
+          const paymentLabel = orderPaymentLabel(o, berlinTomorrowYmd, berlinTodayYmd);
           const isPrepaid = paymentLabel === "paid";
           return (
           <li key={o.id}>
@@ -580,6 +646,8 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
           );
         })}
       </ul>
+            </div>
+          </div>
 
       {manualOpen ? (
         <div className="fixed inset-0 z-[85] flex items-end justify-center bg-slate-950/55 p-0 sm:items-center sm:p-4" onClick={() => setManualOpen(false)}>
@@ -769,7 +837,7 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
       {detailOrder ? (
         <div
           className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/55 p-0 sm:items-center sm:p-4"
-          onClick={() => setDetailId(null)}
+          onClick={closeDetail}
           role="presentation"
         >
           <div
@@ -782,11 +850,18 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Bestellnummer</p>
-                  <p className="text-4xl font-black tabular-nums text-brand-green sm:text-5xl">#{detailOrder.order_number}</p>
+                  <button
+                    type="button"
+                    onClick={tapOrderNumberForOverride}
+                    className="text-left text-4xl font-black tabular-nums text-brand-green sm:text-5xl"
+                    aria-label={`Bestellnummer ${detailOrder.order_number}`}
+                  >
+                    #{detailOrder.order_number}
+                  </button>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setDetailId(null)}
+                  onClick={closeDetail}
                   className="min-h-10 shrink-0 rounded-full bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 active:bg-slate-200 sm:min-h-0 sm:py-1.5"
                 >
                   Schließen
@@ -820,7 +895,7 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
                 <button
                   type="button"
                   onClick={() => {
-                    setRepeatSuccess("");
+                    setRepeatSuccess(null);
                     setRepeatOrder(detailOrder);
                   }}
                   className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-brand-yellow/50 bg-brand-yellow/15 px-3 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-brand-yellow/25 active:bg-brand-yellow/30"
@@ -958,7 +1033,7 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
               ) : (
                 <button
                   type="button"
-                  onClick={() => setDetailId(null)}
+                  onClick={closeDetail}
                   className="min-h-12 w-full rounded-2xl bg-brand-orange py-3.5 text-sm font-bold text-white hover:brightness-95"
                 >
                   Schließen
@@ -968,6 +1043,21 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
           </div>
         </div>
       ) : null}
+
+      <StaffOrderOverridePanel
+        open={overrideOpen}
+        order={detailOrder}
+        apiPrefix={apiPrefix}
+        catalog={catalog}
+        unlocked={overrideUnlocked}
+        onUnlocked={() => setOverrideUnlocked(true)}
+        onClose={() => setOverrideOpen(false)}
+        onSuccess={async () => {
+          setOverrideOpen(false);
+          await load();
+        }}
+      />
+
       {packOpen ? (
         <div
           data-packliste-print-overlay="true"
@@ -1178,12 +1268,11 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
         onCreated={(data) => {
           setRepeatOrder(null);
           setDetailId(null);
-          setRepeatSuccess(
-            data?.orderNumber != null
-              ? `Vorbestellung #${data.orderNumber} für morgen wurde angelegt.`
-              : "Vorbestellung für morgen wurde angelegt."
-          );
-          setService("tomorrow");
+          setRepeatSuccess({
+            orderNumber: data?.orderNumber ?? null,
+            customerName: data?.customerName ?? "",
+            paidNow: Boolean(data?.paidNow)
+          });
           void load();
         }}
       />

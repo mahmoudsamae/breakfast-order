@@ -17,12 +17,7 @@ export default async function BranchStaffPage({ params }) {
   const showRegistration = await getRegistrationEnabled();
 
   return (
-    <div className="fb-page-branch">
-      <div className="mb-3 flex justify-end text-xs">
-        <Link href={`/b/${slug}/login`} className="text-slate-500 hover:text-slate-800">
-          Interner Bereich
-        </Link>
-      </div>
+    <div className="fb-page-staff">
       <BranchAppChrome
         branchSlug={slug}
         branchName={branch.name}
