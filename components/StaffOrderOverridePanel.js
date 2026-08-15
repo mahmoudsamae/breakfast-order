@@ -48,9 +48,11 @@ export default function StaffOrderOverridePanel({
   const [editOpen, setEditOpen] = useState(false);
   const [confirmPayment, setConfirmPayment] = useState(null);
   const [confirmUndeliver, setConfirmUndeliver] = useState(false);
+  const [confirmReopenNoshow, setConfirmReopenNoshow] = useState(false);
 
   const paid = Boolean(order?.paid_at);
   const isDelivered = order?.status === "delivered";
+  const isNotPickedUp = order?.status === "not_picked_up";
   const isPending = order?.status === "pending";
 
   useEffect(() => {
@@ -62,6 +64,7 @@ export default function StaffOrderOverridePanel({
     setEditOpen(false);
     setConfirmPayment(null);
     setConfirmUndeliver(false);
+    setConfirmReopenNoshow(false);
     setEditLines(linesFromOrder(order));
     setPhase(unlocked ? "menu" : "pin");
   }, [open, order, unlocked]);
@@ -169,6 +172,26 @@ export default function StaffOrderOverridePanel({
     }
   }
 
+  async function reopenNoshow() {
+    setActionErr("");
+    setActionLoading(true);
+    try {
+      const res = await fetch(`${apiPrefix}/orders/${order.id}/reopen`, {
+        method: "PATCH",
+        credentials: "include"
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Wiederöffnen fehlgeschlagen.");
+      setConfirmReopenNoshow(false);
+      onSuccess?.();
+      onClose();
+    } catch (err) {
+      setActionErr(String(err.message || err));
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   function setLineQty(key, qty) {
     setEditLines((prev) => prev.map((l) => (l.key === key ? { ...l, quantity: qty } : l)));
   }
@@ -214,7 +237,7 @@ export default function StaffOrderOverridePanel({
   return (
     <div
       className="fixed inset-0 z-[95] flex items-end justify-center bg-slate-950/65 p-0 sm:items-center sm:p-4"
-      onClick={() => !actionLoading && !confirmPayment && !confirmUndeliver && onClose()}
+      onClick={() => !actionLoading && !confirmPayment && !confirmUndeliver && !confirmReopenNoshow && onClose()}
       role="presentation"
     >
       <div
@@ -279,6 +302,16 @@ export default function StaffOrderOverridePanel({
                 className="min-h-12 w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 text-left text-sm font-bold text-amber-950 hover:bg-amber-100"
               >
                 Auslieferung rückgängig
+              </button>
+            ) : null}
+            {isNotPickedUp ? (
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={() => setConfirmReopenNoshow(true)}
+                className="min-h-12 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 text-left text-sm font-bold text-slate-900 hover:bg-slate-100"
+              >
+                „Nicht abgeholt“ rückgängig (Offen)
               </button>
             ) : null}
             {isPending ? (
@@ -437,6 +470,47 @@ export default function StaffOrderOverridePanel({
                 disabled={actionLoading}
                 onClick={undeliver}
                 className="min-h-11 rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-bold text-white hover:brightness-95 disabled:opacity-50 sm:min-h-0 sm:py-2"
+              >
+                {actionLoading ? "…" : "Bestätigen"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmReopenNoshow ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4"
+          onClick={() => !actionLoading && setConfirmReopenNoshow(false)}
+          role="presentation"
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-reopen-noshow-title"
+          >
+            <h3 id="confirm-reopen-noshow-title" className="text-lg font-bold text-slate-900">
+              „Nicht abgeholt“ rückgängig?
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              Die Bestellung wird wieder als offen gesetzt. Grund und Notiz werden gelöscht.
+            </p>
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={() => setConfirmReopenNoshow(false)}
+                className="min-h-11 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:min-h-0 sm:py-2"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={reopenNoshow}
+                className="min-h-11 rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-bold text-white hover:brightness-95 disabled:opacity-50 sm:min-h-0 sm:py-2"
               >
                 {actionLoading ? "…" : "Bestätigen"}
               </button>
