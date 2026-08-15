@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireBranchSession } from "@/lib/api-branch-guard";
 import { fetchBranchBySlug } from "@/lib/branch-server";
 import { normalizeNotPickedUpReason } from "@/lib/not-picked-up-reasons";
+import { getBerlinNow } from "@/lib/order-utils";
 import { getSupabaseServerClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +31,28 @@ export async function PATCH(req, { params }) {
   const note = noteRaw.trim().slice(0, 2000) || null;
 
   const supabase = getSupabaseServerClient();
+  const { data: order, error: fetchErr } = await supabase
+    .from("orders")
+    .select("id, status, pickup_date")
+    .eq("id", id)
+    .eq("branch_id", branch.id)
+    .maybeSingle();
+
+  if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+  if (!order) return NextResponse.json({ error: "Bestellung nicht gefunden." }, { status: 404 });
+  if (order.status !== "pending") {
+    return NextResponse.json({ error: "Nur offene Bestellungen können als nicht abgeholt markiert werden." }, { status: 400 });
+  }
+
+  const { date: todayBerlin } = getBerlinNow();
+  const pickupYmd = String(order.pickup_date || "").slice(0, 10);
+  if (pickupYmd !== todayBerlin) {
+    return NextResponse.json(
+      { error: "„Nicht abgeholt“ ist erst am Abholtag möglich (nicht für Bestellungen von morgen)." },
+      { status: 400 }
+    );
+  }
+
   const updateWithReason = await supabase
     .from("orders")
     .update({

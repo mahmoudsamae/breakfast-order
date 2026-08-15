@@ -47,6 +47,7 @@ export default function StaffOrderOverridePanel({
   const [editLines, setEditLines] = useState([]);
   const [editOpen, setEditOpen] = useState(false);
   const [confirmPayment, setConfirmPayment] = useState(null);
+  const [confirmUndeliver, setConfirmUndeliver] = useState(false);
 
   const paid = Boolean(order?.paid_at);
   const isDelivered = order?.status === "delivered";
@@ -60,6 +61,7 @@ export default function StaffOrderOverridePanel({
     setActionLoading(false);
     setEditOpen(false);
     setConfirmPayment(null);
+    setConfirmUndeliver(false);
     setEditLines(linesFromOrder(order));
     setPhase(unlocked ? "menu" : "pin");
   }, [open, order, unlocked]);
@@ -148,7 +150,6 @@ export default function StaffOrderOverridePanel({
   }
 
   async function undeliver() {
-    if (!window.confirm("Auslieferung wirklich rückgängig machen?")) return;
     setActionErr("");
     setActionLoading(true);
     try {
@@ -158,6 +159,7 @@ export default function StaffOrderOverridePanel({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Rückgängig fehlgeschlagen.");
+      setConfirmUndeliver(false);
       onSuccess?.();
       onClose();
     } catch (err) {
@@ -212,7 +214,7 @@ export default function StaffOrderOverridePanel({
   return (
     <div
       className="fixed inset-0 z-[95] flex items-end justify-center bg-slate-950/65 p-0 sm:items-center sm:p-4"
-      onClick={() => !actionLoading && !confirmPayment && onClose()}
+      onClick={() => !actionLoading && !confirmPayment && !confirmUndeliver && onClose()}
       role="presentation"
     >
       <div
@@ -273,7 +275,7 @@ export default function StaffOrderOverridePanel({
               <button
                 type="button"
                 disabled={actionLoading}
-                onClick={undeliver}
+                onClick={() => setConfirmUndeliver(true)}
                 className="min-h-12 w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 text-left text-sm font-bold text-amber-950 hover:bg-amber-100"
               >
                 Auslieferung rückgängig
@@ -394,6 +396,47 @@ export default function StaffOrderOverridePanel({
                 disabled={actionLoading}
                 onClick={() => setPayment(confirmPayment.paid)}
                 className="min-h-11 rounded-xl bg-brand-green px-4 py-2.5 text-sm font-bold text-white hover:brightness-95 disabled:opacity-50 sm:min-h-0 sm:py-2"
+              >
+                {actionLoading ? "…" : "Bestätigen"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmUndeliver ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4"
+          onClick={() => !actionLoading && setConfirmUndeliver(false)}
+          role="presentation"
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-undeliver-title"
+          >
+            <h3 id="confirm-undeliver-title" className="text-lg font-bold text-slate-900">
+              Auslieferung rückgängig?
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              Die Bestellung wird wieder als offen (ausstehend) gesetzt – auch bei Vorbestellungen für morgen.
+            </p>
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={() => setConfirmUndeliver(false)}
+                className="min-h-11 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:min-h-0 sm:py-2"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={undeliver}
+                className="min-h-11 rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-bold text-white hover:brightness-95 disabled:opacity-50 sm:min-h-0 sm:py-2"
               >
                 {actionLoading ? "…" : "Bestätigen"}
               </button>

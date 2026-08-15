@@ -211,6 +211,12 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
   const { date: berlinTodayYmd } = getBerlinNow();
   const detailOrder = detailId ? orders.find((o) => o.id === detailId) : null;
   const detailPaymentLabel = detailOrder ? orderPaymentLabel(detailOrder, berlinTomorrowYmd, berlinTodayYmd) : null;
+  /** Deliver / not-picked-up only on the real pickup day (today), never for tomorrow orders. */
+  const canCompletePickupToday =
+    Boolean(detailOrder) &&
+    orderListMode === "open" &&
+    detailOrder.status === "pending" &&
+    orderPickupYmd(detailOrder.pickup_date) === berlinTodayYmd;
 
   function tapOrderNumberForOverride() {
     orderNumberTaps.current += 1;
@@ -1009,7 +1015,7 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
             </div>
 
             <div className="sticky bottom-0 border-t border-slate-100 bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom,0px)+0.75rem)] sm:p-5 sm:pb-5">
-              {orderListMode === "open" && detailOrder.status === "pending" ? (
+              {canCompletePickupToday ? (
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <button
                     type="button"
@@ -1031,13 +1037,22 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
                   </button>
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={closeDetail}
-                  className="min-h-12 w-full rounded-2xl bg-brand-orange py-3.5 text-sm font-bold text-white hover:brightness-95"
-                >
-                  Schließen
-                </button>
+                <div className="space-y-2">
+                  {orderListMode === "open" &&
+                  detailOrder.status === "pending" &&
+                  orderPickupYmd(detailOrder.pickup_date) === berlinTomorrowYmd ? (
+                    <p className="text-center text-xs leading-relaxed text-slate-500">
+                      Auslieferung und „Nicht abgeholt“ sind erst am Abholtag möglich.
+                    </p>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={closeDetail}
+                    className="min-h-12 w-full rounded-2xl bg-brand-orange py-3.5 text-sm font-bold text-white hover:brightness-95"
+                  >
+                    Schließen
+                  </button>
+                </div>
               )}
             </div>
           </div>
