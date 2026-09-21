@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import QuantityPicker from "@/components/QuantityPicker";
+import { parseEigenesMenueFromCustomerName } from "@/lib/eigenes-menue";
 import { formatMoney } from "@/lib/format-money";
 
 function linesFromOrder(order) {
   return (order?.order_items || [])
-    .map((i, idx) => {
+    .map((i) => {
       const productId = i.product_id != null ? Number(i.product_id) : i.products?.id != null ? Number(i.products.id) : null;
       const menuId = i.menu_id != null ? Number(i.menu_id) : i.menus?.id != null ? Number(i.menus.id) : null;
       const label = i.products?.name || i.menus?.name || "—";
@@ -26,7 +27,7 @@ function linesFromOrder(order) {
 }
 
 /**
- * Hidden staff corrections: PIN gate, then payment / undeliver / edit items.
+ * Hidden staff corrections: PIN gate, then payment / undeliver / edit items / rename / delete.
  */
 export default function StaffOrderOverridePanel({
   open,
@@ -46,14 +47,20 @@ export default function StaffOrderOverridePanel({
   const [actionLoading, setActionLoading] = useState(false);
   const [editLines, setEditLines] = useState([]);
   const [editOpen, setEditOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
   const [confirmPayment, setConfirmPayment] = useState(null);
   const [confirmUndeliver, setConfirmUndeliver] = useState(false);
   const [confirmReopenNoshow, setConfirmReopenNoshow] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   const paid = Boolean(order?.paid_at);
   const isDelivered = order?.status === "delivered";
   const isNotPickedUp = order?.status === "not_picked_up";
   const isPending = order?.status === "pending";
+  const displayName = order ? parseEigenesMenueFromCustomerName(order.customer_name).cleanName : "";
+  const blockingConfirm = Boolean(confirmPayment || confirmUndeliver || confirmReopenNoshow || confirmDelete);
 
   useEffect(() => {
     if (!open || !order) return;
@@ -62,9 +69,13 @@ export default function StaffOrderOverridePanel({
     setActionErr("");
     setActionLoading(false);
     setEditOpen(false);
+    setRenameOpen(false);
+    setRenameValue(parseEigenesMenueFromCustomerName(order.customer_name).cleanName);
     setConfirmPayment(null);
     setConfirmUndeliver(false);
     setConfirmReopenNoshow(false);
+    setConfirmDelete(false);
+    setDeleteConfirmText("");
     setEditLines(linesFromOrder(order));
     setPhase(unlocked ? "menu" : "pin");
   }, [open, order, unlocked]);
@@ -143,7 +154,7 @@ export default function StaffOrderOverridePanel({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Zahlung konnte nicht geändert werden.");
       setConfirmPayment(null);
-      onSuccess?.();
+      onSuccess?.({ kind: "payment" });
       onClose();
     } catch (err) {
       setActionErr(String(err.message || err));
@@ -163,7 +174,7 @@ export default function StaffOrderOverridePanel({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Rückgängig fehlgeschlagen.");
       setConfirmUndeliver(false);
-      onSuccess?.();
+      onSuccess?.({ kind: "undeliver" });
       onClose();
     } catch (err) {
       setActionErr(String(err.message || err));
@@ -183,7 +194,7 @@ export default function StaffOrderOverridePanel({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Wiederöffnen fehlgeschlagen.");
       setConfirmReopenNoshow(false);
-      onSuccess?.();
+      onSuccess?.({ kind: "reopen" });
       onClose();
     } catch (err) {
       setActionErr(String(err.message || err));
@@ -225,7 +236,63 @@ export default function StaffOrderOverridePanel({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Speichern fehlgeschlagen.");
-      onSuccess?.();
+      onSuccess?.({ kind: "items" });
+      onClose();
+    } catch (err) {
+      setActionErr(String(err.message || err));
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function saveName() {
+    const next = String(renameValue || "").trim();
+    if (!next) {
+      setActionErr("Name ist erforderlich.");
+      return;
+    }
+    if (next === displayName) {
+      setRenameOpen(false);
+      return;
+    }
+    setActionErr("");
+    setActionLoading(true);
+    try {
+      const res = await fetch(`${apiPrefix}/orders/${order.id}/customer-name`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ customerName: next })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Name konnte nicht geändert werden.");
+      setRenameOpen(false);
+      onSuccess?.({ kind: "rename" });
+      onClose();
+    } catch (err) {
+      setActionErr(String(err.message || err));
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function hardDeleteOrder() {
+    const expected = String(order.order_number ?? "");
+    if (deleteConfirmText.trim() !== expected) {
+      setActionErr(`Bitte Bestellnummer ${expected} zur Bestätigung eingeben.`);
+      return;
+    }
+    setActionErr("");
+    setActionLoading(true);
+    try {
+      const res = await fetch(`${apiPrefix}/orders/${order.id}`, {
+        method: "DELETE",
+        credentials: "include"
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Löschen fehlgeschlagen.");
+      setConfirmDelete(false);
+      onSuccess?.({ kind: "delete", deleted: true });
       onClose();
     } catch (err) {
       setActionErr(String(err.message || err));
@@ -237,7 +304,7 @@ export default function StaffOrderOverridePanel({
   return (
     <div
       className="fixed inset-0 z-[95] flex items-end justify-center bg-slate-950/65 p-0 sm:items-center sm:p-4"
-      onClick={() => !actionLoading && !confirmPayment && !confirmUndeliver && !confirmReopenNoshow && onClose()}
+      onClick={() => !actionLoading && !blockingConfirm && onClose()}
       role="presentation"
     >
       <div
@@ -284,8 +351,20 @@ export default function StaffOrderOverridePanel({
           </form>
         ) : null}
 
-        {phase === "menu" && !editOpen ? (
+        {phase === "menu" && !editOpen && !renameOpen ? (
           <div className="mt-4 space-y-2">
+            <button
+              type="button"
+              disabled={actionLoading}
+              onClick={() => {
+                setActionErr("");
+                setRenameValue(displayName);
+                setRenameOpen(true);
+              }}
+              className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-left text-sm font-bold text-slate-900 hover:bg-slate-50"
+            >
+              Namen ändern
+            </button>
             <button
               type="button"
               disabled={actionLoading}
@@ -324,10 +403,62 @@ export default function StaffOrderOverridePanel({
                 Artikel bearbeiten
               </button>
             ) : null}
+            <button
+              type="button"
+              disabled={actionLoading}
+              onClick={() => {
+                setActionErr("");
+                setDeleteConfirmText("");
+                setConfirmDelete(true);
+              }}
+              className="min-h-12 w-full rounded-2xl border border-red-200 bg-red-50 px-4 text-left text-sm font-bold text-red-800 hover:bg-red-100"
+            >
+              Bestellung endgültig löschen
+            </button>
             {actionErr ? <p className="text-sm text-red-700">{actionErr}</p> : null}
             <button type="button" onClick={onClose} className="min-h-11 w-full text-sm font-semibold text-slate-500">
               Schließen
             </button>
+          </div>
+        ) : null}
+
+        {phase === "menu" && renameOpen ? (
+          <div className="mt-4 space-y-3">
+            <p className="text-sm font-semibold text-slate-800">Namen ändern</p>
+            <p className="text-xs leading-relaxed text-slate-500">
+              Nur der Anzeigename. Eigenes-Menü-Zusatz (falls vorhanden) bleibt erhalten.
+            </p>
+            <input
+              type="text"
+              autoComplete="off"
+              maxLength={120}
+              className="min-h-12 w-full rounded-xl border border-slate-200 px-3 text-base text-slate-900 shadow-sm focus:border-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/25"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              disabled={actionLoading}
+            />
+            {actionErr ? <p className="text-sm text-red-700">{actionErr}</p> : null}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={() => {
+                  setRenameOpen(false);
+                  setActionErr("");
+                }}
+                className="min-h-11 rounded-xl text-sm font-semibold text-slate-600"
+              >
+                Zurück
+              </button>
+              <button
+                type="button"
+                disabled={actionLoading || !String(renameValue || "").trim()}
+                onClick={saveName}
+                className="min-h-11 rounded-xl bg-brand-green text-sm font-bold text-white disabled:opacity-50"
+              >
+                {actionLoading ? "…" : "Speichern"}
+              </button>
+            </div>
           </div>
         ) : null}
 
@@ -513,6 +644,78 @@ export default function StaffOrderOverridePanel({
                 className="min-h-11 rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-bold text-white hover:brightness-95 disabled:opacity-50 sm:min-h-0 sm:py-2"
               >
                 {actionLoading ? "…" : "Bestätigen"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmDelete ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4"
+          onClick={() => {
+            if (!actionLoading) {
+              setConfirmDelete(false);
+              setDeleteConfirmText("");
+              setActionErr("");
+            }
+          }}
+          role="presentation"
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-delete-order-title"
+          >
+            <h3 id="confirm-delete-order-title" className="text-lg font-bold text-red-800">
+              Bestellung endgültig löschen?
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              Bestellung <span className="font-bold text-slate-900">#{order.order_number}</span>
+              {displayName ? (
+                <>
+                  {" "}
+                  ({displayName})
+                </>
+              ) : null}{" "}
+              wird dauerhaft aus der Datenbank entfernt. Das kann nicht rückgängig gemacht werden.
+            </p>
+            <label className="mt-4 block text-xs font-bold uppercase tracking-wide text-slate-500">
+              Bestellnummer zur Bestätigung eingeben
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              className="mt-1.5 min-h-11 w-full rounded-xl border border-red-200 px-3 text-center text-lg font-bold tabular-nums text-slate-900"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value.replace(/\D/g, ""))}
+              placeholder={String(order.order_number ?? "")}
+              disabled={actionLoading}
+            />
+            {actionErr ? <p className="mt-2 text-sm text-red-700">{actionErr}</p> : null}
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={() => {
+                  setConfirmDelete(false);
+                  setDeleteConfirmText("");
+                  setActionErr("");
+                }}
+                className="min-h-11 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:min-h-0 sm:py-2"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                disabled={actionLoading || deleteConfirmText.trim() !== String(order.order_number ?? "")}
+                onClick={hardDeleteOrder}
+                className="min-h-11 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white hover:brightness-95 disabled:opacity-50 sm:min-h-0 sm:py-2"
+              >
+                {actionLoading ? "…" : "Endgültig löschen"}
               </button>
             </div>
           </div>

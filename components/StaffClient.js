@@ -1067,8 +1067,11 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
         unlocked={overrideUnlocked}
         onUnlocked={() => setOverrideUnlocked(true)}
         onClose={() => setOverrideOpen(false)}
-        onSuccess={async () => {
+        onSuccess={async (result) => {
           setOverrideOpen(false);
+          if (result?.deleted || result?.kind === "delete") {
+            setDetailId(null);
+          }
           await load();
         }}
       />
