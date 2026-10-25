@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchBranchBySlug } from "@/lib/branch-server";
-import { DUPLICATE_ORDER_CODE, placeCustomerOrder } from "@/lib/place-customer-order";
+import { DUPLICATE_ORDER_CODE, GUEST_ORDERS_PAUSED_CODE, placeCustomerOrder } from "@/lib/place-customer-order";
 import { getSupabaseServerClient } from "@/lib/supabase";
 
 /**
@@ -26,6 +26,9 @@ export async function POST(req) {
     const result = await placeCustomerOrder(supabase, { branchId: branch.id, body });
 
     if (!result.ok) {
+      if (result.code === GUEST_ORDERS_PAUSED_CODE) {
+        return NextResponse.json({ error: result.error, code: result.code }, { status: result.status });
+      }
       if (result.code === DUPLICATE_ORDER_CODE) {
         return NextResponse.json(
           {

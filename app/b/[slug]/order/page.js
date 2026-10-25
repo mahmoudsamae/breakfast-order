@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import BranchAppChrome from "@/components/BranchAppChrome";
 import OrderClient from "@/components/OrderClient";
 import { fetchBranchBySlug } from "@/lib/branch-server";
+import { getGuestOrdersPaused } from "@/lib/guest-orders-paused";
 import { getSupabaseServerClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ export default async function BranchOrderPage({ params }) {
 
   const supabase = getSupabaseServerClient();
   const branchId = branch.id;
+  const { paused: guestOrdersPaused } = await getGuestOrdersPaused(supabase, branchId);
   const [{ data: products, error: productsError }, { data: menus, error: menusError }] = await Promise.all([
     supabase.from("products").select("id,name,price,image_url,is_active,category").eq("branch_id", branchId).eq("is_active", true).order("id"),
     supabase.from("menus").select("id,name,description,price,image_url,is_active").eq("branch_id", branchId).eq("is_active", true).order("id")
@@ -31,6 +33,7 @@ export default async function BranchOrderPage({ params }) {
         branchSlug={slug}
         orderApiPath={`/api/branches/${slug}/orders`}
         branchDisplayName={branch.name}
+        guestOrdersPaused={guestOrdersPaused}
       />
       <footer className="mt-10 border-t border-slate-200/80 pt-4 text-center text-xs leading-relaxed text-slate-500">
         <p className="font-medium text-slate-600/90">{branch.name}</p>

@@ -22,7 +22,15 @@ import { buildOrderSummarySnapshot } from "@/lib/order-cart-summary";
 import { readLastOrderSummary, writeLastOrderSummary } from "@/lib/last-order-storage";
 import { clearRegistrationNumberSession, readRegistrationNumberSession } from "@/lib/registration-session";
 
-export default function OrderClient({ products, menus, loadError, branchSlug, orderApiPath, branchDisplayName }) {
+export default function OrderClient({
+  products,
+  menus,
+  loadError,
+  branchSlug,
+  orderApiPath,
+  branchDisplayName,
+  guestOrdersPaused = false
+}) {
   const { t, locale } = useI18n();
   const [name, setName] = useState("");
   const nameInputRef = useRef(null);
@@ -172,6 +180,10 @@ export default function OrderClient({ products, menus, loadError, branchSlug, or
         return;
       }
       const msg = String(data.error || "Bestellung fehlgeschlagen.");
+      if (data.code === "GUEST_ORDERS_PAUSED" || /derzeit geschlossen/.test(msg)) {
+        setBanner(t("order.closedBody"));
+        return;
+      }
       if (/08:00.*21:00/.test(msg)) {
         setOutsideTimeModalOpen(true);
         return;
@@ -219,6 +231,24 @@ export default function OrderClient({ products, menus, loadError, branchSlug, or
     const pulseTimer = window.setTimeout(() => setNameFieldPulse(false), 700);
     return () => window.clearTimeout(pulseTimer);
   }, [nameFieldPulse]);
+
+  if (guestOrdersPaused) {
+    return (
+      <div className="space-y-5 sm:space-y-6">
+        <section className="fb-hero">
+          <p className="text-xs uppercase tracking-[0.2em] text-white/70">{t("order.heroTag")}</p>
+          <h1 className="mt-2 text-xl font-bold leading-tight sm:text-2xl">{t("order.heroTitle")}</h1>
+        </section>
+        <div className="rounded-3xl border border-brand-orange/30 bg-white p-6 text-center shadow-md ring-1 ring-slate-200/90 sm:p-8">
+          <p className="text-3xl" aria-hidden>
+            ⛔
+          </p>
+          <h2 className="mt-3 text-xl font-bold text-slate-900">{t("order.closedTitle")}</h2>
+          <p className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">{t("order.closedBody")}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 sm:space-y-6">

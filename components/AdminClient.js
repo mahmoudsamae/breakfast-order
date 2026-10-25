@@ -130,6 +130,8 @@ export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = ""
   const [exportingAll, setExportingAll] = useState(false);
   const [exportInfo, setExportInfo] = useState("");
   const [notPickedUpOpen, setNotPickedUpOpen] = useState(false);
+  const [guestOrdersPaused, setGuestOrdersPaused] = useState(null);
+  const [guestOrdersToggleBusy, setGuestOrdersToggleBusy] = useState(false);
 
   const loadAll = useCallback(async () => {
     setErr("");
@@ -154,6 +156,47 @@ export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = ""
   useEffect(() => {
     loadAll();
   }, [loadAll]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${apiPrefix}/guest-orders`, { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && typeof data.paused === "boolean") setGuestOrdersPaused(data.paused);
+      } catch {
+        /* optional endpoint — leave toggle hidden */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [apiPrefix]);
+
+  async function toggleGuestOrdersPaused() {
+    if (guestOrdersPaused == null || guestOrdersToggleBusy) return;
+    const nextPaused = !guestOrdersPaused;
+    if (nextPaused && !window.confirm("Gäste können dann nicht mehr bestellen. Staff und Admin bleiben aktiv. Fortfahren?")) {
+      return;
+    }
+    setGuestOrdersToggleBusy(true);
+    setErr("");
+    try {
+      const res = await fetch(`${apiPrefix}/guest-orders`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paused: nextPaused })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Status konnte nicht geändert werden.");
+      setGuestOrdersPaused(Boolean(data.paused));
+    } catch (e) {
+      setErr(String(e.message || e));
+    } finally {
+      setGuestOrdersToggleBusy(false);
+    }
+  }
 
   async function saveProduct(p) {
     const res = await fetch(`${apiPrefix}/products`, {
@@ -337,7 +380,25 @@ export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = ""
             {t.label}
           </button>
         ))}
-        <div className="ml-auto">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          {guestOrdersPaused != null ? (
+            <button
+              type="button"
+              onClick={toggleGuestOrdersPaused}
+              disabled={guestOrdersToggleBusy}
+              className={`min-h-11 rounded-2xl px-4 py-2.5 text-sm font-bold transition active:scale-[0.99] disabled:opacity-60 ${
+                guestOrdersPaused
+                  ? "bg-brand-orange/15 text-brand-orange ring-1 ring-brand-orange/40"
+                  : "bg-white text-slate-800 ring-1 ring-slate-200 hover:ring-brand-orange/40"
+              }`}
+            >
+              {guestOrdersToggleBusy
+                ? "…"
+                : guestOrdersPaused
+                  ? "Gastbestellungen öffnen"
+                  : "Gastbestellungen stoppen"}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={exportAllOrdersExcel}
@@ -348,6 +409,12 @@ export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = ""
           </button>
         </div>
       </div>
+      {guestOrdersPaused ? (
+        <div className="rounded-2xl border border-brand-orange/35 bg-brand-orange/10 px-4 py-3.5 text-sm leading-relaxed text-slate-800 shadow-sm">
+          <p className="font-bold text-brand-orange">Gastbestellungen gestoppt</p>
+          <p className="mt-1">Gäste sehen auf der Bestellseite, dass die Bestellung beendet ist. Staff und Admin bleiben unverändert aktiv.</p>
+        </div>
+      ) : null}
 
       {err ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm leading-relaxed text-red-800 shadow-sm break-words">{err}</div>
