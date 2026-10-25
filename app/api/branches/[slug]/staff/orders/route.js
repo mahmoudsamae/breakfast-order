@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireBranchSession } from "@/lib/api-branch-guard";
 import { fetchBranchBySlug } from "@/lib/branch-server";
+import { getGuestOrdersPaused } from "@/lib/guest-orders-paused";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { fetchStaffCatalog } from "@/lib/staff-catalog";
 import { getBerlinNow, MAX_QTY_PER_ITEM, tomorrowBerlinDate } from "@/lib/order-utils";
@@ -76,6 +77,9 @@ export async function GET(req, { params }) {
   const filtered = q
     ? orders.filter((o) => o.customer_name.toLowerCase().includes(q) || String(o.order_number).includes(q))
     : orders;
+
+  const { paused: guestOrdersPaused } = await getGuestOrdersPaused(supabase, branchId);
+
   return NextResponse.json({
     orders: filtered,
     listMode,
@@ -88,7 +92,8 @@ export async function GET(req, { params }) {
     preparationSummary,
     preparationPacklist,
     dayMatrixPacklist,
-    catalog
+    catalog,
+    guestOrdersPaused
   });
 }
 

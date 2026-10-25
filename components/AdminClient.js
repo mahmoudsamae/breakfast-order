@@ -131,7 +131,15 @@ export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = ""
   const [exportInfo, setExportInfo] = useState("");
   const [notPickedUpOpen, setNotPickedUpOpen] = useState(false);
   const [guestOrdersPaused, setGuestOrdersPaused] = useState(null);
+  const [guestOrdersPausedMessage, setGuestOrdersPausedMessage] = useState(
+    "Heute können keine Bestellungen mehr aufgegeben werden."
+  );
+  const [guestOrdersDefaultMessage, setGuestOrdersDefaultMessage] = useState(
+    "Heute können keine Bestellungen mehr aufgegeben werden."
+  );
   const [guestOrdersToggleBusy, setGuestOrdersToggleBusy] = useState(false);
+  const [pauseMessageOpen, setPauseMessageOpen] = useState(false);
+  const [pauseMessageDraft, setPauseMessageDraft] = useState("");
 
   const loadAll = useCallback(async () => {
     setErr("");
@@ -164,7 +172,10 @@ export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = ""
         const res = await fetch(`${apiPrefix}/guest-orders`, { cache: "no-store" });
         if (!res.ok) return;
         const data = await res.json();
-        if (!cancelled && typeof data.paused === "boolean") setGuestOrdersPaused(data.paused);
+        if (cancelled || typeof data.paused !== "boolean") return;
+        setGuestOrdersPaused(data.paused);
+        if (data.defaultMessage) setGuestOrdersDefaultMessage(String(data.defaultMessage));
+        if (data.message) setGuestOrdersPausedMessage(String(data.message));
       } catch {
         /* optional endpoint — leave toggle hidden */
       }
@@ -174,23 +185,34 @@ export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = ""
     };
   }, [apiPrefix]);
 
-  async function toggleGuestOrdersPaused() {
+  function openPauseGuestOrdersDialog() {
     if (guestOrdersPaused == null || guestOrdersToggleBusy) return;
-    const nextPaused = !guestOrdersPaused;
-    if (nextPaused && !window.confirm("Gäste können dann nicht mehr bestellen. Staff und Admin bleiben aktiv. Fortfahren?")) {
+    if (guestOrdersPaused) {
+      void applyGuestOrdersPaused(false);
       return;
     }
+    setPauseMessageDraft(guestOrdersPausedMessage || guestOrdersDefaultMessage);
+    setPauseMessageOpen(true);
+  }
+
+  async function applyGuestOrdersPaused(nextPaused, message) {
+    if (guestOrdersPaused == null || guestOrdersToggleBusy) return;
     setGuestOrdersToggleBusy(true);
     setErr("");
     try {
       const res = await fetch(`${apiPrefix}/guest-orders`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paused: nextPaused })
+        body: JSON.stringify({
+          paused: nextPaused,
+          ...(nextPaused ? { message: String(message || "").trim() || guestOrdersDefaultMessage } : {})
+        })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Status konnte nicht geändert werden.");
       setGuestOrdersPaused(Boolean(data.paused));
+      if (data.message) setGuestOrdersPausedMessage(String(data.message));
+      setPauseMessageOpen(false);
     } catch (e) {
       setErr(String(e.message || e));
     } finally {
@@ -384,7 +406,7 @@ export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = ""
           {guestOrdersPaused != null ? (
             <button
               type="button"
-              onClick={toggleGuestOrdersPaused}
+              onClick={openPauseGuestOrdersDialog}
               disabled={guestOrdersToggleBusy}
               className={`min-h-11 rounded-2xl px-4 py-2.5 text-sm font-bold transition active:scale-[0.99] disabled:opacity-60 ${
                 guestOrdersPaused
@@ -412,7 +434,69 @@ export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = ""
       {guestOrdersPaused ? (
         <div className="rounded-2xl border border-brand-orange/35 bg-brand-orange/10 px-4 py-3.5 text-sm leading-relaxed text-slate-800 shadow-sm">
           <p className="font-bold text-brand-orange">Gastbestellungen gestoppt</p>
-          <p className="mt-1">Gäste sehen auf der Bestellseite, dass die Bestellung beendet ist. Staff und Admin bleiben unverändert aktiv.</p>
+          <p className="mt-1">Text für Gäste:</p>
+          <p className="mt-1 font-medium text-slate-900">{guestOrdersPausedMessage}</p>
+          <p className="mt-2 text-xs text-slate-600">Staff und Admin bleiben unverändert aktiv.</p>
+        </div>
+      ) : null}
+
+      {pauseMessageOpen ? (
+        <div
+          className="fixed inset-0 z-[95] flex items-end justify-center bg-slate-950/55 p-0 sm:items-center sm:p-4"
+          onClick={() => !guestOrdersToggleBusy && setPauseMessageOpen(false)}
+          role="presentation"
+        >
+          <div
+            className="w-full max-w-md rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pause-guest-orders-title"
+          >
+            <h3 id="pause-guest-orders-title" className="text-lg font-bold text-slate-900">
+              Gastbestellungen stoppen
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              Text für die Gäste-Bestellseite. Staff und Admin bleiben aktiv.
+            </p>
+            <label className="mt-4 block text-xs font-bold uppercase tracking-wide text-slate-500">
+              Anzeigetext
+            </label>
+            <textarea
+              rows={4}
+              maxLength={400}
+              className="mt-1.5 min-h-[6rem] w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 shadow-sm focus:border-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/25"
+              value={pauseMessageDraft}
+              onChange={(e) => setPauseMessageDraft(e.target.value)}
+              disabled={guestOrdersToggleBusy}
+            />
+            <button
+              type="button"
+              disabled={guestOrdersToggleBusy}
+              onClick={() => setPauseMessageDraft(guestOrdersDefaultMessage)}
+              className="mt-2 text-xs font-semibold text-brand-teal hover:underline"
+            >
+              Standardtext wiederherstellen
+            </button>
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={guestOrdersToggleBusy}
+                onClick={() => setPauseMessageOpen(false)}
+                className="min-h-11 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:min-h-0 sm:py-2"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                disabled={guestOrdersToggleBusy || !String(pauseMessageDraft || "").trim()}
+                onClick={() => applyGuestOrdersPaused(true, pauseMessageDraft)}
+                className="min-h-11 rounded-xl bg-brand-orange px-4 py-2.5 text-sm font-bold text-white hover:brightness-95 disabled:opacity-50 sm:min-h-0 sm:py-2"
+              >
+                {guestOrdersToggleBusy ? "…" : "Jetzt stoppen"}
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
 

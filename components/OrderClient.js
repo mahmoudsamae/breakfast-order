@@ -29,7 +29,8 @@ export default function OrderClient({
   branchSlug,
   orderApiPath,
   branchDisplayName,
-  guestOrdersPaused = false
+  guestOrdersPaused = false,
+  guestOrdersPausedMessage = ""
 }) {
   const { t, locale } = useI18n();
   const [name, setName] = useState("");
@@ -244,7 +245,9 @@ export default function OrderClient({
             ⛔
           </p>
           <h2 className="mt-3 text-xl font-bold text-slate-900">{t("order.closedTitle")}</h2>
-          <p className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">{t("order.closedBody")}</p>
+          <p className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">
+            {guestOrdersPausedMessage?.trim() || t("order.closedBody")}
+          </p>
         </div>
       </div>
     );

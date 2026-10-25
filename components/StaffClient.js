@@ -91,6 +91,7 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
   const [canScrollDown, setCanScrollDown] = useState(false);
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [overrideUnlocked, setOverrideUnlocked] = useState(false);
+  const [guestOrdersPaused, setGuestOrdersPaused] = useState(false);
   const orderNumberTaps = useRef(0);
   const orderNumberTapTimer = useRef(null);
 
@@ -111,6 +112,7 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
     if (Array.isArray(data.dayMatrixPacklist)) setDayMatrixPacklist(data.dayMatrixPacklist);
     if (data.pickupDate) setPickupDateLabel(data.pickupDate);
     if (data.catalog) setCatalog(data.catalog);
+    setGuestOrdersPaused(Boolean(data.guestOrdersPaused));
     setLoading(false);
   }
 
@@ -425,6 +427,14 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
                 Morgen
               </button>
             </div>
+            {service === "tomorrow" && guestOrdersPaused ? (
+              <div className="mt-3 rounded-2xl border border-white/30 bg-white/15 px-3 py-2.5 text-sm leading-relaxed text-white">
+                <p className="font-bold">Gastbestellungen gestoppt</p>
+                <p className="mt-1 text-white/95">
+                  Für morgen kommen voraussichtlich keine neuen Online-Bestellungen — die Gäste-Bestellung ist derzeit geschlossen.
+                </p>
+              </div>
+            ) : null}
           </section>
 
           <section className="rounded-3xl border border-brand-yellow/40 bg-white p-4 shadow-md ring-1 ring-slate-200/90 sm:p-5 xl:max-h-[calc(100dvh-5rem)] xl:overflow-y-auto xl:overscroll-y-contain">
