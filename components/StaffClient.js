@@ -63,7 +63,7 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
   const [pickupDateYmd, setPickupDateYmd] = useState("");
   const [clearingDone, setClearingDone] = useState(false);
   const [q, setQ] = useState("");
-  const [orders, setOrders] = useState([]);
+  const [dayOrders, setDayOrders] = useState([]);
   const [catalog, setCatalog] = useState({ products: [], menus: [] });
   const [preparationSummary, setPreparationSummary] = useState({ products: [], menus: [] });
   const [preparationPacklist, setPreparationPacklist] = useState([]);
@@ -95,16 +95,26 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
   const orderNumberTaps = useRef(0);
   const orderNumberTapTimer = useRef(null);
 
+  const orders = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    const modeOrders = dayOrders.filter((o) =>
+      orderListMode === "done" ? o.status === "delivered" || o.status === "not_picked_up" : o.status === "pending"
+    );
+    if (!needle) return modeOrders;
+    return modeOrders.filter(
+      (o) =>
+        String(o.customer_name || "").toLowerCase().includes(needle) ||
+        String(o.order_number ?? "").includes(needle)
+    );
+  }, [dayOrders, orderListMode, q]);
+
   async function load() {
     setLoading(true);
     setErr("");
-    const res = await fetch(
-      `${apiPrefix}/orders?service=${service}&list=${orderListMode}&q=${encodeURIComponent(q)}`,
-      { cache: "no-store" }
-    );
+    const res = await fetch(`${apiPrefix}/orders?service=${service}`, { cache: "no-store" });
     const data = await res.json();
     if (!res.ok) setErr(data.error || "Fehler beim Laden.");
-    setOrders(data.orders || []);
+    setDayOrders(data.orders || []);
     setOrderCounts(data.counts || { open: 0, done: 0 });
     setPickupDateYmd(data.pickupDate || "");
     if (data.preparationSummary) setPreparationSummary(data.preparationSummary);
@@ -119,7 +129,7 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [service, orderListMode, q, apiPrefix]);
+  }, [service, apiPrefix]);
 
   useEffect(() => {
     if (activeTab !== "orders") return;
