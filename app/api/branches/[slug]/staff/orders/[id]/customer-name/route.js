@@ -66,8 +66,7 @@ export async function PATCH(req, { params }) {
       orderId: id,
       branchId: branch.id,
       action: "rename",
-      role: session.role,
-      details: { customerName: customer_name }
+      role: session.role
     });
     return NextResponse.json({ ok: true, customerName: customer_name });
   } catch (e) {

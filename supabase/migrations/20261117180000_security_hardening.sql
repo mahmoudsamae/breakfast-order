@@ -156,3 +156,27 @@ BEGIN
     $cmd$DELETE FROM public.login_attempts WHERE created_at < now() - interval '1 day'$cmd$
   );
 END $$;
+
+-- -----------------------------------------------------------------------------
+-- 5) Drop order action rows older than 180 days. 02:20 UTC.
+--    details stores no names; this only limits how long the log is kept.
+-- -----------------------------------------------------------------------------
+DO $$
+DECLARE
+  existing bigint;
+BEGIN
+  SELECT jobid INTO existing
+  FROM cron.job
+  WHERE jobname = 'purge_order_events'
+  LIMIT 1;
+
+  IF existing IS NOT NULL THEN
+    PERFORM cron.unschedule(existing);
+  END IF;
+
+  PERFORM cron.schedule(
+    'purge_order_events',
+    '20 2 * * *',
+    $cmd$DELETE FROM public.order_events WHERE created_at < now() - interval '180 days'$cmd$
+  );
+END $$;

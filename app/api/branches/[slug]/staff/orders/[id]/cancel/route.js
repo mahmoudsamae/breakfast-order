@@ -43,8 +43,7 @@ export async function POST(req, { params }) {
     orderId: id,
     branchId: branch.id,
     action: "cancel",
-    role: session.role,
-    details: reason ? { reason } : null
+    role: session.role
   });
   return NextResponse.json({ ok: true });
 }
