@@ -7,12 +7,10 @@ import { fetchStaffCatalog } from "@/lib/staff-catalog";
 import { getBerlinNow, MAX_QTY_PER_ITEM, tomorrowBerlinDate } from "@/lib/order-utils";
 import {
   autoHideDoneOrdersBeforeToday,
-  fetchStaffDayMatrixOrders,
-  fetchStaffOrderListCounts,
-  fetchStaffOrdersForList
+  fetchStaffPickupDayOrders,
+  partitionStaffPickupDay
 } from "@/lib/staff-orders-list";
 import {
-  mapOrdersWithSummary,
   menuTotalsFromOrders,
   packlistProductsFromOrders,
   pickupDateForService,
@@ -30,8 +28,6 @@ export async function GET(req, { params }) {
 
   const supabase = getSupabaseServerClient();
   const url = new URL(req.url);
-  const q = (url.searchParams.get("q") || "").toLowerCase();
-  const listMode = url.searchParams.get("list") === "done" ? "done" : "open";
   const pickupDate = pickupDateForService(url.searchParams.get("service"));
   const branchId = branch.id;
   const { catalog, error: catalogErr } = await fetchStaffCatalog(supabase, branchId);
@@ -44,53 +40,31 @@ export async function GET(req, { params }) {
     return NextResponse.json({ error: String(autoErr.message || autoErr) }, { status: 500 });
   }
 
-  const [{ orders: listOrders, error: listErr }, countsRes] = await Promise.all([
-    fetchStaffOrdersForList(supabase, { branchId, pickupDate, listMode }),
-    fetchStaffOrderListCounts(supabase, { branchId, pickupDate })
-  ]);
-
-  if (listErr) return NextResponse.json({ error: listErr.message }, { status: 500 });
-  if (countsRes.error) return NextResponse.json({ error: countsRes.error.message }, { status: 500 });
-
-  const orders = listOrders;
-  let pendingForPrep = orders;
-  if (listMode === "done") {
-    const openRes = await fetchStaffOrdersForList(supabase, { branchId, pickupDate, listMode: "open" });
-    if (openRes.error) return NextResponse.json({ error: openRes.error.message }, { status: 500 });
-    pendingForPrep = openRes.orders;
-  }
-
-  const normalizedProducts = packlistProductsFromOrders(pendingForPrep);
-  const preparationSummary = {
-    products: normalizedProducts,
-    menus: menuTotalsFromOrders(pendingForPrep)
-  };
-  const preparationPacklist = normalizedProducts;
-
-  const { data: dayData, error: dayErr } = await fetchStaffDayMatrixOrders(supabase, { branchId, pickupDate });
-
+  const { orders: dayOrders, error: dayErr, staffHiddenSupported } = await fetchStaffPickupDayOrders(supabase, {
+    branchId,
+    pickupDate
+  });
   if (dayErr) return NextResponse.json({ error: dayErr.message }, { status: 500 });
 
-  const dayOrders = mapOrdersWithSummary(dayData);
+  const { open, done, visible } = partitionStaffPickupDay(dayOrders, staffHiddenSupported);
+  const normalizedProducts = packlistProductsFromOrders(open);
+  const preparationSummary = {
+    products: normalizedProducts,
+    menus: menuTotalsFromOrders(open)
+  };
   const dayMatrixPacklist = packlistProductsFromOrders(dayOrders);
-
-  const filtered = q
-    ? orders.filter((o) => o.customer_name.toLowerCase().includes(q) || String(o.order_number).includes(q))
-    : orders;
-
   const { paused: guestOrdersPaused } = await getGuestOrdersPaused(supabase, branchId);
 
   return NextResponse.json({
-    orders: filtered,
-    listMode,
+    orders: visible,
     pickupDate,
     counts: {
-      open: countsRes.openCount,
-      done: countsRes.doneCount
+      open: open.length,
+      done: done.length
     },
-    staffHiddenSupported: countsRes.staffHiddenSupported,
+    staffHiddenSupported,
     preparationSummary,
-    preparationPacklist,
+    preparationPacklist: normalizedProducts,
     dayMatrixPacklist,
     catalog,
     guestOrdersPaused

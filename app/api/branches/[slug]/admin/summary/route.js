@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireBranchSession } from "@/lib/api-branch-guard";
 import { fetchBranchBySlug } from "@/lib/branch-server";
-import { buildAdminSummaryPayload } from "@/lib/build-admin-summary";
+import {
+  berlinDayStartUtcIso,
+  buildAdminSummaryPayload,
+  summaryWindowStartYmd
+} from "@/lib/build-admin-summary";
 import { fetchOrdersAndItemsForSummary } from "@/lib/fetch-orders-for-summary";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { berlinDateFromIso, berlinDateWithOffset, getBerlinNow } from "@/lib/order-utils";
@@ -21,12 +25,21 @@ export async function GET(_, { params }) {
   const supabase = getSupabaseServerClient();
   const { date: today } = getBerlinNow();
   const tomorrowPickup = berlinDateWithOffset(1);
+  const windowStartYmd = summaryWindowStartYmd(today);
+  const windowStartIso = berlinDayStartUtcIso(windowStartYmd);
 
   let orders;
+  let supplementalOrders;
   let items;
   try {
-    const loaded = await fetchOrdersAndItemsForSummary(supabase, { branchId });
+    const loaded = await fetchOrdersAndItemsForSummary(supabase, {
+      branchId,
+      windowStartIso,
+      windowStartYmd,
+      pendingPickupDate: today
+    });
     orders = loaded.orders;
+    supplementalOrders = loaded.supplementalOrders;
     items = loaded.items;
   } catch (e) {
     const message = String(e?.message || e);
@@ -41,10 +54,17 @@ export async function GET(_, { params }) {
     .eq("pickup_date", tomorrowPickup)
     .eq("status", "pending");
 
+  const { count: registrationsTotal, error: regCountErr } = await supabase
+    .from("registrations_analytics")
+    .select("id", { count: "exact", head: true })
+    .eq("branch_id", branchId);
+  if (regCountErr) return NextResponse.json({ error: regCountErr.message }, { status: 500 });
+
   const { data: regRows, error: regErr } = await supabase
     .from("registrations_analytics")
     .select("created_at")
-    .eq("branch_id", branchId);
+    .eq("branch_id", branchId)
+    .gte("created_at", windowStartIso);
   if (regErr) return NextResponse.json({ error: regErr.message }, { status: 500 });
 
   const regs = regRows || [];
@@ -52,6 +72,7 @@ export async function GET(_, { params }) {
   const byDay = new Map();
   for (const r of regs) {
     const d = berlinDateFromIso(r.created_at);
+    if (!d || d < windowStartYmd) continue;
     byDay.set(d, (byDay.get(d) || 0) + 1);
   }
   const registrationDailyCounts = [...byDay.entries()]
@@ -61,12 +82,13 @@ export async function GET(_, { params }) {
 
   const payload = buildAdminSummaryPayload({
     orders,
+    supplementalOrders,
     items,
     today,
     pendingTomorrow: pendingTomorrowRes.count || 0,
     registrations: {
       registrationsToday,
-      registrationsTotal: regs.length,
+      registrationsTotal: registrationsTotal || 0,
       registrationDailyCounts
     }
   });

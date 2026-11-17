@@ -150,7 +150,7 @@ function HourlyOrderingChart({ rows, peakHour }) {
   return (
     <div>
       <div className="overflow-x-auto">
-        <svg viewBox={`0 0 ${w} ${h}`} className="min-w-[300px] w-full" role="img" aria-label="Bestellzeiten 08 bis 21 Uhr">
+        <svg viewBox={`0 0 ${w} ${h}`} className="min-w-[300px] w-full" role="img" aria-label="Bestellzeiten 08 bis 21 Uhr, letzte 14 Tage">
           <defs>
             <linearGradient id="hourBarGrad" x1="0" y1="1" x2="0" y2="0">
               <stop offset="0%" stopColor="#57adae" />
@@ -396,15 +396,15 @@ export default function AdminOverviewInsights({ summary, showRegistration, onOpe
               <span className="text-lg font-black text-brand-orange">{summary.pendingTomorrow}</span>
             </li>
             <li className="flex justify-between gap-3 border-b border-slate-100 pb-2">
-              <span className="text-slate-500">Peak-Bestellzeit (08–21 Uhr)</span>
+              <span className="text-slate-500">Peak-Bestellzeit (08–21 Uhr, letzte 14 Tage)</span>
               <span className="font-bold text-slate-900">{summary.peakHourLabel || "—"}</span>
             </li>
             <li className="flex justify-between gap-3 border-b border-slate-100 pb-2">
-              <span className="text-slate-500">Bestellungen 18–21 Uhr (gesamt)</span>
+              <span className="text-slate-500">Bestellungen 18–21 Uhr (letzte 14 Tage)</span>
               <span className="font-bold">{summary.orders18to21}</span>
             </li>
             <li className="flex justify-between gap-3">
-              <span className="text-slate-500">Im Bestellfenster 08–21 Uhr</span>
+              <span className="text-slate-500">Im Bestellfenster 08–21 Uhr (letzte 14 Tage)</span>
               <span className="font-bold">
                 {summary.ordersBusinessHoursPct}%{" "}
                 <span className="font-normal text-slate-500">({summary.ordersBusinessHours})</span>
@@ -422,7 +422,9 @@ export default function AdminOverviewInsights({ summary, showRegistration, onOpe
       </section>
 
       <section>
-        <SectionTitle hint="Wann Gäste bestellen — nur relevante Stunden">Bestellzeiten (08–21 Uhr)</SectionTitle>
+        <SectionTitle hint="Wann Gäste bestellen — letzte 14 Tage, nur relevante Stunden">
+          Bestellzeiten (08–21 Uhr)
+        </SectionTitle>
         <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm sm:p-5">
           <HourlyOrderingChart rows={summary.hourlyOrderingWindow || []} peakHour={summary.peakHour} />
         </div>
@@ -447,7 +449,7 @@ export default function AdminOverviewInsights({ summary, showRegistration, onOpe
             </div>
           </div>
           <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Highlights</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Highlights · letzte 14 Tage</p>
             <ul className="mt-3 space-y-2.5 text-sm">
               <li className="rounded-xl bg-brand-green/10 px-3 py-2">
                 <span className="text-slate-500">Top-Produkt:</span>{" "}
@@ -495,16 +497,16 @@ export default function AdminOverviewInsights({ summary, showRegistration, onOpe
       ) : null}
 
       <section>
-        <SectionTitle>Gesamt · historisch</SectionTitle>
+        <SectionTitle>Gesamt · letzte 14 Tage</SectionTitle>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <KpiCard label="Alle Bestellungen" value={summary.totalOrders} />
-          <KpiCard label="Gesamtumsatz" value={formatMoney(summary.totalRevenue)} tone="green" />
-          <KpiCard label="Verkaufte Artikel" value={summary.totalArticlesSold} />
+          <KpiCard label="Alle Bestellungen" value={summary.totalOrders} hint="letzte 14 Tage" />
+          <KpiCard label="Gesamtumsatz" value={formatMoney(summary.totalRevenue)} tone="green" hint="letzte 14 Tage" />
+          <KpiCard label="Verkaufte Artikel" value={summary.totalArticlesSold} hint="letzte 14 Tage" />
           <KpiCard
-            label="Nicht abgeholt gesamt"
+            label="Nicht abgeholt"
             value={summary.notPickedUpTotal || 0}
             tone="orange"
-            hint="Gesamt über alle Tage"
+            hint="letzte 14 Tage"
             footer={
               summary.notPickedUpDetails?.length ? (
                 <button
@@ -521,8 +523,8 @@ export default function AdminOverviewInsights({ summary, showRegistration, onOpe
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
-        <TopBarList title="Top 5 Produkte" rows={summary.topProducts} barColor="#649552" />
-        <TopBarList title="Top 5 Menüs" rows={summary.topMenus} barColor="#57adae" />
+        <TopBarList title="Top 5 Produkte · letzte 14 Tage" rows={summary.topProducts} barColor="#649552" />
+        <TopBarList title="Top 5 Menüs · letzte 14 Tage" rows={summary.topMenus} barColor="#57adae" />
       </section>
     </div>
   );
