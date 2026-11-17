@@ -75,6 +75,39 @@ ALTER TABLE public.login_attempts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS cancelled_at timestamptz;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS cancel_reason text;
 
+-- Past pickup days: blank the name and the two free-text fields that can hold a name.
+CREATE OR REPLACE FUNCTION public.anonymize_past_order_names()
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  updated_count integer;
+BEGIN
+  UPDATE public.orders
+  SET customer_name = 'Gast',
+      cancel_reason = NULL,
+      not_picked_up_note = NULL
+  WHERE pickup_date < (timezone('Europe/Berlin', now()))::date
+    AND (
+      customer_name IS DISTINCT FROM 'Gast'
+      OR cancel_reason IS NOT NULL
+      OR not_picked_up_note IS NOT NULL
+    );
+
+  GET DIAGNOSTICS updated_count = ROW_COUNT;
+  RETURN updated_count;
+END;
+$$;
+
+COMMENT ON FUNCTION public.anonymize_past_order_names() IS
+  'For orders whose pickup day in Europe/Berlin is already over, sets customer_name to Gast and clears cancel_reason and not_picked_up_note. Returns the number of updated rows.';
+
+REVOKE ALL ON FUNCTION public.anonymize_past_order_names() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.anonymize_past_order_names() FROM anon;
+REVOKE EXECUTE ON FUNCTION public.anonymize_past_order_names() FROM authenticated;
+
 -- One row per order action. order_id stays after a permanent delete.
 CREATE TABLE IF NOT EXISTS public.order_events (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
