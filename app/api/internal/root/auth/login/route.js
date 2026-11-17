@@ -5,6 +5,14 @@ import {
   ROOT_SESSION_COOKIE_NAME,
   rootSessionCookieOptions
 } from "@/lib/root-session";
+import {
+  clearLoginFailuresForUser,
+  clientIpHashFromRequest,
+  INVALID_LOGIN_MESSAGE,
+  LOGIN_LOCKED_MESSAGE,
+  loginIsBlocked,
+  recordLoginFailure
+} from "@/lib/login-attempts";
 import { getSupabaseServerClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +30,15 @@ export async function POST(req) {
     }
 
     const supabase = getSupabaseServerClient();
+    const ipHash = clientIpHashFromRequest(req);
+    const attemptKey = { scope: "root", username, ipHash };
+    if (await loginIsBlocked(attemptKey)) {
+      return NextResponse.json(
+        { error: LOGIN_LOCKED_MESSAGE },
+        { status: 429, headers: { "Retry-After": "900" } }
+      );
+    }
+
     const { data: row, error } = await supabase
       .from("root_admins")
       .select("id,password_hash,is_active")
@@ -30,13 +47,17 @@ export async function POST(req) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     if (!row?.password_hash || !row.is_active) {
-      return NextResponse.json({ error: "Ungültige Zugangsdaten." }, { status: 401 });
+      await recordLoginFailure(attemptKey);
+      return NextResponse.json({ error: INVALID_LOGIN_MESSAGE }, { status: 401 });
     }
 
     const ok = await bcrypt.compare(password, row.password_hash);
     if (!ok) {
-      return NextResponse.json({ error: "Ungültige Zugangsdaten." }, { status: 401 });
+      await recordLoginFailure(attemptKey);
+      return NextResponse.json({ error: INVALID_LOGIN_MESSAGE }, { status: 401 });
     }
+
+    await clearLoginFailuresForUser(attemptKey);
 
     const now = Math.floor(Date.now() / 1000);
     const exp = now + 60 * 60 * 24 * 7;
