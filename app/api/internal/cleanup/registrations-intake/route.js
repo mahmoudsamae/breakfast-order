@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { secretsEqual } from "@/lib/secret-equal";
 import { getSupabaseServerClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +16,7 @@ export async function POST(req) {
 
   const auth = req.headers.get("authorization") || "";
   const bearer = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-  if (bearer !== secret) {
+  if (!secretsEqual(bearer, secret)) {
     return NextResponse.json({ error: "Nicht berechtigt." }, { status: 401 });
   }
 

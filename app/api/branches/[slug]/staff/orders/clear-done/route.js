@@ -3,12 +3,13 @@ import { requireBranchSession } from "@/lib/api-branch-guard";
 import { fetchBranchBySlug } from "@/lib/branch-server";
 import { hideDoneOrdersFromStaffList } from "@/lib/staff-orders-list";
 import { pickupDateForService } from "@/lib/staff-orders-shared";
+import { recordOrderEvent } from "@/lib/order-events";
 import { getSupabaseServerClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req, { params }) {
-  const { error: authErr } = await requireBranchSession(params.slug, ["team", "admin"]);
+  const { error: authErr, session } = await requireBranchSession(params.slug, ["team", "admin"]);
   if (authErr) return authErr;
 
   const { branch, error: brErr } = await fetchBranchBySlug(params.slug);
@@ -22,6 +23,12 @@ export async function POST(req, { params }) {
     const { hiddenCount } = await hideDoneOrdersFromStaffList(supabase, {
       branchId: branch.id,
       pickupDate
+    });
+    await recordOrderEvent(supabase, {
+      branchId: branch.id,
+      action: "clear_done",
+      role: session.role,
+      details: { pickupDate, hiddenCount }
     });
 
     return NextResponse.json({

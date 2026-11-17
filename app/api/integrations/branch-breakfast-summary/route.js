@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { fetchBranchBySlug } from "@/lib/branch-server";
 import { normalizeBranchSlug } from "@/lib/branch-slug";
+import { secretsEqual } from "@/lib/secret-equal";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { berlinDateFromIso, berlinDateWithOffset, berlinHourFromIso, getBerlinNow } from "@/lib/order-utils";
 
@@ -236,7 +237,7 @@ export async function GET(req) {
       return NextResponse.json({ ok: false, error: "integration_unconfigured" }, { status: 503 });
     }
     const token = req.headers.get("x-integration-token");
-    if (!token || token !== expected) {
+    if (!secretsEqual(token, expected)) {
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 

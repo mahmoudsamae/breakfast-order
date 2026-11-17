@@ -7,6 +7,14 @@ import {
   SESSION_COOKIE_NAME,
   sessionCookieOptions
 } from "@/lib/internal-session";
+import {
+  clearLoginFailuresForUser,
+  clientIpHashFromRequest,
+  INVALID_LOGIN_MESSAGE,
+  LOGIN_LOCKED_MESSAGE,
+  loginIsBlocked,
+  recordLoginFailure
+} from "@/lib/login-attempts";
 import { getSupabaseServerClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +37,15 @@ export async function POST(req, { params }) {
     }
 
     const supabase = getSupabaseServerClient();
+    const ipHash = clientIpHashFromRequest(req);
+    const attemptKey = { scope: "branch", branchId: branch.id, username, ipHash };
+    if (await loginIsBlocked(attemptKey)) {
+      return NextResponse.json(
+        { error: LOGIN_LOCKED_MESSAGE },
+        { status: 429, headers: { "Retry-After": "900" } }
+      );
+    }
+
     const { data: cred, error } = await supabase
       .from("branch_credentials")
       .select("id,password_hash,role")
@@ -39,13 +56,17 @@ export async function POST(req, { params }) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     if (!cred?.password_hash) {
-      return NextResponse.json({ error: "Ungültige Zugangsdaten." }, { status: 401 });
+      await recordLoginFailure(attemptKey);
+      return NextResponse.json({ error: INVALID_LOGIN_MESSAGE }, { status: 401 });
     }
 
     const ok = await bcrypt.compare(password, cred.password_hash);
     if (!ok) {
-      return NextResponse.json({ error: "Ungültige Zugangsdaten." }, { status: 401 });
+      await recordLoginFailure(attemptKey);
+      return NextResponse.json({ error: INVALID_LOGIN_MESSAGE }, { status: 401 });
     }
+
+    await clearLoginFailuresForUser(attemptKey);
 
     if (cred.role !== "team" && cred.role !== "admin") {
       return NextResponse.json({ error: "Ungültige Rolle." }, { status: 403 });

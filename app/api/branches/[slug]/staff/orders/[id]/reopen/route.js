@@ -1,17 +1,15 @@
 import { NextResponse } from "next/server";
-import { requireStaffOverride } from "@/lib/api-staff-override-guard";
+import { requireBranchSession } from "@/lib/api-branch-guard";
 import { fetchBranchBySlug } from "@/lib/branch-server";
+import { recordOrderEvent, rejectIfCancelled } from "@/lib/order-events";
 import { getSupabaseServerClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
-/**
- * PIN-gated: reset not_picked_up → pending (Offen).
- * Works for today and tomorrow (to fix accidental noshow marks).
- */
+/** Reset not_picked_up → pending (Offen). Works for today and tomorrow. */
 export async function PATCH(_, { params }) {
-  const { error: guardErr } = await requireStaffOverride(params.slug);
-  if (guardErr) return guardErr;
+  const { error: authErr, session } = await requireBranchSession(params.slug, ["team", "admin"]);
+  if (authErr) return authErr;
 
   const { branch, error: brErr } = await fetchBranchBySlug(params.slug);
   if (brErr || !branch) return NextResponse.json({ error: "Standort nicht gefunden." }, { status: 404 });
@@ -22,6 +20,8 @@ export async function PATCH(_, { params }) {
   }
 
   const supabase = getSupabaseServerClient();
+  const blocked = await rejectIfCancelled(supabase, { id, branchId: branch.id });
+  if (blocked) return blocked;
   const withReason = await supabase
     .from("orders")
     .update({
@@ -36,6 +36,7 @@ export async function PATCH(_, { params }) {
     .maybeSingle();
 
   if (!withReason.error && withReason.data) {
+    await recordOrderEvent(supabase, { orderId: id, branchId: branch.id, action: "reopen", role: session.role });
     return NextResponse.json({ ok: true, status: "pending" });
   }
 
@@ -66,5 +67,6 @@ export async function PATCH(_, { params }) {
     );
   }
 
+  await recordOrderEvent(supabase, { orderId: id, branchId: branch.id, action: "reopen", role: session.role });
   return NextResponse.json({ ok: true, status: "pending" });
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import BranchAppChrome from "@/components/BranchAppChrome";
 import StaffClient from "@/components/StaffClient";
 import { fetchBranchBySlug } from "@/lib/branch-server";
+import { getSessionFromCookies } from "@/lib/internal-session";
 import { getRegistrationEnabled } from "@/lib/platform-settings";
 import { notFound } from "next/navigation";
 
@@ -15,6 +16,8 @@ export default async function BranchStaffPage({ params }) {
   const slug = branch.slug;
   const apiPrefix = `/api/branches/${slug}/staff`;
   const showRegistration = await getRegistrationEnabled();
+  const session = await getSessionFromCookies();
+  const staffRole = session?.role === "admin" ? "admin" : "team";
 
   return (
     <div className="fb-page-staff">
@@ -41,7 +44,7 @@ export default async function BranchStaffPage({ params }) {
           </>
         }
       />
-      <StaffClient apiPrefix={apiPrefix} showRegistration={showRegistration} />
+      <StaffClient apiPrefix={apiPrefix} showRegistration={showRegistration} staffRole={staffRole} />
     </div>
   );
 }

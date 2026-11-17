@@ -13,6 +13,66 @@ import {
 import AdminOverviewInsights from "@/components/admin/AdminOverviewInsights";
 import { downloadOrdersExcel } from "@/lib/export-to-excel";
 
+const ORDER_EVENT_LABELS = {
+  deliver: "Ausgeliefert",
+  undeliver: "Auslieferung rückgängig",
+  reopen: "Wieder geöffnet",
+  items: "Artikel geändert",
+  payment: "Zahlung",
+  rename: "Name geändert",
+  not_picked_up: "Nicht abgeholt",
+  delete: "Endgültig gelöscht",
+  cancel: "Storniert",
+  restore: "Storno aufgehoben",
+  repeat: "Wiederholt",
+  create: "Erfasst",
+  clear_done: "Erledigte ausgeblendet"
+};
+
+function OrderEventsList({ apiPrefix }) {
+  const [events, setEvents] = useState([]);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${apiPrefix}/order-events`, { cache: "no-store" })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Protokoll konnte nicht geladen werden.");
+        if (!cancelled) setEvents(Array.isArray(data.events) ? data.events : []);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(String(e.message || "Protokoll konnte nicht geladen werden."));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiPrefix]);
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <h2 className="text-sm font-bold text-slate-900">Letzte Aktionen</h2>
+      <p className="mt-1 text-xs text-slate-500">Die letzten 100 Einträge dieses Standorts. Nur lesen.</p>
+      {error ? <p className="mt-3 text-sm text-red-700">{error}</p> : null}
+      {!error && events.length === 0 ? <p className="mt-3 text-sm text-slate-500">Noch keine Einträge.</p> : null}
+      {events.length ? (
+        <ul className="mt-3 divide-y divide-slate-100">
+          {events.map((event) => (
+            <li key={event.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2 text-sm">
+              <span className="font-semibold text-slate-800">{ORDER_EVENT_LABELS[event.action] || event.action}</span>
+              <span className="text-xs text-slate-500">
+                {event.role || "—"}
+                {" · "}
+                {event.created_at ? new Date(event.created_at).toLocaleString("de-DE") : "—"}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+
 async function upload(file, folder, apiPrefix) {
   const fd = new FormData();
   fd.append("file", file);
@@ -516,6 +576,7 @@ export default function AdminClient({ apiPrefix = "/api/admin", branchLabel = ""
           onOpenNotPickedUp={() => setNotPickedUpOpen(true)}
         />
       ) : null}
+      {tab === "overview" ? <OrderEventsList apiPrefix={apiPrefix} /> : null}
 
       {tab === "overview" && !summary && !err ? (
         <div className="rounded-2xl border border-brand-yellow/50 bg-brand-yellow/15 px-4 py-8 text-center text-sm leading-relaxed text-brand-green" aria-live="polite">

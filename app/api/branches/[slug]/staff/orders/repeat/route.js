@@ -3,13 +3,14 @@ import { requireBranchSession } from "@/lib/api-branch-guard";
 import { fetchBranchBySlug } from "@/lib/branch-server";
 import { createStaffRepeatOrder } from "@/lib/staff-repeat-order";
 import { isMissingPaidAtColumn } from "@/lib/staff-orders-shared";
+import { recordOrderEvent, rejectIfCancelled } from "@/lib/order-events";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { tomorrowBerlinDate } from "@/lib/order-utils";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req, { params }) {
-  const { error: authErr } = await requireBranchSession(params.slug, ["team", "admin"]);
+  const { error: authErr, session } = await requireBranchSession(params.slug, ["team", "admin"]);
   if (authErr) return authErr;
 
   const { branch, error: brErr } = await fetchBranchBySlug(params.slug);
@@ -30,6 +31,8 @@ export async function POST(req, { params }) {
     const lines = Array.isArray(body.lines) ? body.lines : [];
 
     const supabase = getSupabaseServerClient();
+    const blocked = await rejectIfCancelled(supabase, { id: sourceOrderId, branchId: branch.id });
+    if (blocked) return blocked;
     const result = await createStaffRepeatOrder(supabase, {
       branchId: branch.id,
       sourceOrderId,
@@ -48,6 +51,13 @@ export async function POST(req, { params }) {
       }
     }
 
+    await recordOrderEvent(supabase, {
+      orderId: result.orderId,
+      branchId: branch.id,
+      action: "repeat",
+      role: session.role,
+      details: { sourceOrderId }
+    });
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
     const status = Number(e?.status) || 500;
