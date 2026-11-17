@@ -54,16 +54,17 @@ const PACKLISTE_PRINT_SUMMARY_PRODUCTS = [
   "Buttercroissant"
 ];
 
-export default function StaffClient({ apiPrefix = "/api/staff", showRegistration = false }) {
+export default function StaffClient({ apiPrefix = "/api/staff", showRegistration = false, staffRole = "team" }) {
   const packlistePrintInFlightRef = useRef(false);
   const [activeTab, setActiveTab] = useState("orders");
   const [service, setService] = useState("today");
   const [orderListMode, setOrderListMode] = useState("open");
-  const [orderCounts, setOrderCounts] = useState({ open: 0, done: 0 });
+  const [orderCounts, setOrderCounts] = useState({ open: 0, done: 0, cancelled: 0 });
   const [pickupDateYmd, setPickupDateYmd] = useState("");
   const [clearingDone, setClearingDone] = useState(false);
   const [q, setQ] = useState("");
   const [dayOrders, setDayOrders] = useState([]);
+  const [cancelledOrders, setCancelledOrders] = useState([]);
   const [catalog, setCatalog] = useState({ products: [], menus: [] });
   const [preparationSummary, setPreparationSummary] = useState({ products: [], menus: [] });
   const [preparationPacklist, setPreparationPacklist] = useState([]);
@@ -89,24 +90,24 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
   const [repeatSuccess, setRepeatSuccess] = useState(null);
   const [canScrollUp, setCanScrollUp] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(false);
-  const [overrideOpen, setOverrideOpen] = useState(false);
-  const [overrideUnlocked, setOverrideUnlocked] = useState(false);
+  const [actionOrderId, setActionOrderId] = useState(null);
   const [guestOrdersPaused, setGuestOrdersPaused] = useState(false);
-  const orderNumberTaps = useRef(0);
-  const orderNumberTapTimer = useRef(null);
 
   const orders = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    const modeOrders = dayOrders.filter((o) =>
-      orderListMode === "done" ? o.status === "delivered" || o.status === "not_picked_up" : o.status === "pending"
-    );
+    const modeOrders =
+      orderListMode === "cancelled"
+        ? cancelledOrders
+        : dayOrders.filter((o) =>
+            orderListMode === "done" ? o.status === "delivered" || o.status === "not_picked_up" : o.status === "pending"
+          );
     if (!needle) return modeOrders;
     return modeOrders.filter(
       (o) =>
         String(o.customer_name || "").toLowerCase().includes(needle) ||
         String(o.order_number ?? "").includes(needle)
     );
-  }, [dayOrders, orderListMode, q]);
+  }, [cancelledOrders, dayOrders, orderListMode, q]);
 
   async function load() {
     setLoading(true);
@@ -115,7 +116,8 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
     const data = await res.json();
     if (!res.ok) setErr(data.error || "Fehler beim Laden.");
     setDayOrders(data.orders || []);
-    setOrderCounts(data.counts || { open: 0, done: 0 });
+    setCancelledOrders(data.cancelledOrders || []);
+    setOrderCounts(data.counts || { open: 0, done: 0, cancelled: 0 });
     setPickupDateYmd(data.pickupDate || "");
     if (data.preparationSummary) setPreparationSummary(data.preparationSummary);
     if (Array.isArray(data.preparationPacklist)) setPreparationPacklist(data.preparationPacklist);
@@ -230,21 +232,9 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
     detailOrder.status === "pending" &&
     orderPickupYmd(detailOrder.pickup_date) === berlinTodayYmd;
 
-  function tapOrderNumberForOverride() {
-    orderNumberTaps.current += 1;
-    if (orderNumberTapTimer.current) clearTimeout(orderNumberTapTimer.current);
-    orderNumberTapTimer.current = setTimeout(() => {
-      orderNumberTaps.current = 0;
-    }, 1200);
-    if (orderNumberTaps.current >= 5) {
-      orderNumberTaps.current = 0;
-      setOverrideOpen(true);
-    }
-  }
-
   function closeDetail() {
     setDetailId(null);
-    setOverrideOpen(false);
+    setActionOrderId(null);
   }
 
   const detailNameParts = useMemo(
@@ -538,6 +528,13 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
                 >
                   Erledigt ({orderCounts.done})
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setOrderListMode("cancelled")}
+                  className={`min-h-8 flex-1 rounded-lg px-2 py-1.5 text-xs font-bold transition sm:text-sm ${orderListMode === "cancelled" ? "bg-brand-green text-white shadow-sm" : "text-slate-700 hover:bg-white/80"}`}
+                >
+                  Storniert ({orderCounts.cancelled || 0})
+                </button>
               </div>
               {orderListMode === "done" && orders.length > 0 ? (
                 <button
@@ -610,7 +607,11 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
       {!loading && orders.length === 0 ? (
         <div className="rounded-3xl bg-white p-6 text-center shadow-sm ring-1 ring-slate-200/80 sm:p-8">
           <p className="font-semibold text-slate-800">
-            {orderListMode === "done" ? "Keine erledigten Bestellungen" : "Keine offenen Bestellungen"}
+            {orderListMode === "done"
+              ? "Keine erledigten Bestellungen"
+              : orderListMode === "cancelled"
+                ? "Keine stornierten Bestellungen"
+                : "Keine offenen Bestellungen"}
           </p>
           <p className="mt-2 text-sm leading-relaxed text-slate-500">Andere Tagesansicht wählen oder die Suche löschen.</p>
         </div>
@@ -622,22 +623,20 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
           const isPrepaid = paymentLabel === "paid";
           return (
           <li key={o.id}>
-            <button
-              type="button"
-              onClick={() => setDetailId(o.id)}
-              className={`flex min-h-[220px] w-full flex-col rounded-2xl border px-4 py-4 text-left shadow-sm ring-1 transition hover:shadow-md active:scale-[0.99] sm:px-5 sm:py-4 ${
+            <div
+              className={`flex min-h-[220px] w-full flex-col rounded-2xl border px-4 py-4 text-left shadow-sm ring-1 transition sm:px-5 sm:py-4 ${
                 isPrepaid
-                  ? "border-brand-green/40 bg-brand-green/[0.07] ring-brand-green/25 hover:ring-brand-green/40"
-                  : "border-slate-200/90 bg-white ring-slate-100 hover:ring-brand-teal/40"
+                  ? "border-brand-green/40 bg-brand-green/[0.07] ring-brand-green/25"
+                  : "border-slate-200/90 bg-white ring-slate-100"
               }`}
             >
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
+                <button type="button" onClick={() => setDetailId(o.id)} className="min-w-0 flex-1 text-left">
                   <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Bestellnummer</p>
                   <p className="text-3xl font-black tabular-nums leading-none tracking-tight text-brand-green sm:text-[2rem]">
                     #{o.order_number}
                   </p>
-                </div>
+                </button>
                 <div className="flex shrink-0 flex-col items-end gap-1.5">
                   {orderListMode === "done" ? (
                     <span className={`rounded-lg border px-2 py-0.5 text-[10px] font-bold uppercase sm:text-xs ${statusBadgeClass(o.status)}`}>
@@ -654,6 +653,15 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
                   <span className="inline-flex h-8 items-center rounded-lg border border-brand-teal/30 bg-brand-teal/10 px-2.5 text-[11px] font-bold text-brand-teal">
                     Details
                   </span>
+                  <button
+                    type="button"
+                    aria-label={`Aktionen für Bestellung ${o.order_number}`}
+                    aria-haspopup="menu"
+                    onClick={() => setActionOrderId(o.id)}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-lg font-bold leading-none text-slate-700 hover:bg-slate-50"
+                  >
+                    ⋯
+                  </button>
                 </div>
               </div>
               <p className="mt-3 break-words text-[18px] font-bold leading-tight text-slate-900 line-clamp-2">
@@ -666,8 +674,10 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
               <p className="mt-2 line-clamp-3 break-words text-sm leading-relaxed text-slate-600">
                 {o.short_summary || o.items_summary || "—"}
               </p>
-              <p className="mt-auto pt-3 text-[11px] text-slate-400">Tippen für alle Positionen</p>
-            </button>
+              <button type="button" onClick={() => setDetailId(o.id)} className="mt-auto pt-3 text-left text-[11px] text-slate-400">
+                Tippen für alle Positionen
+              </button>
+            </div>
           </li>
           );
         })}
@@ -876,14 +886,9 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Bestellnummer</p>
-                  <button
-                    type="button"
-                    onClick={tapOrderNumberForOverride}
-                    className="text-left text-4xl font-black tabular-nums text-brand-green sm:text-5xl"
-                    aria-label={`Bestellnummer ${detailOrder.order_number}`}
-                  >
+                  <p className="text-left text-4xl font-black tabular-nums text-brand-green sm:text-5xl">
                     #{detailOrder.order_number}
-                  </button>
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -1080,16 +1085,32 @@ export default function StaffClient({ apiPrefix = "/api/staff", showRegistration
       ) : null}
 
       <StaffOrderOverridePanel
-        open={overrideOpen}
-        order={detailOrder}
+        open={actionOrderId != null}
+        order={[...dayOrders, ...cancelledOrders].find((o) => o.id === actionOrderId) || null}
         apiPrefix={apiPrefix}
         catalog={catalog}
-        unlocked={overrideUnlocked}
-        onUnlocked={() => setOverrideUnlocked(true)}
-        onClose={() => setOverrideOpen(false)}
+        staffRole={staffRole}
+        canCompleteToday={
+          orderListMode === "open" &&
+          orderPickupYmd(([...dayOrders, ...cancelledOrders].find((o) => o.id === actionOrderId) || {}).pickup_date) ===
+            berlinTodayYmd
+        }
+        onDeliver={async (id) => {
+          setActionOrderId(null);
+          await deliver(id);
+        }}
+        onNotPickedUp={(id) => {
+          setActionOrderId(null);
+          setConfirmNotPickedUpId(id);
+        }}
+        onRepeat={(order) => {
+          setActionOrderId(null);
+          setRepeatOrder(order);
+        }}
+        onClose={() => setActionOrderId(null)}
         onSuccess={async (result) => {
-          setOverrideOpen(false);
-          if (result?.deleted || result?.kind === "delete") {
+          setActionOrderId(null);
+          if (result?.deleted || result?.kind === "delete" || result?.kind === "cancel") {
             setDetailId(null);
           }
           await load();

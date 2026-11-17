@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { requireBranchSession } from "@/lib/api-branch-guard";
 import { fetchBranchBySlug } from "@/lib/branch-server";
 import { getBerlinNow } from "@/lib/order-utils";
+import { recordOrderEvent, rejectIfCancelled } from "@/lib/order-events";
 import { getSupabaseServerClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
 export async function PATCH(_, { params }) {
-  const { error: authErr } = await requireBranchSession(params.slug, ["team", "admin"]);
+  const { error: authErr, session } = await requireBranchSession(params.slug, ["team", "admin"]);
   if (authErr) return authErr;
 
   const { branch, error: brErr } = await fetchBranchBySlug(params.slug);
@@ -17,6 +18,8 @@ export async function PATCH(_, { params }) {
   if (!Number.isInteger(id) || id <= 0) return NextResponse.json({ error: "Ungültige Bestell-ID." }, { status: 400 });
 
   const supabase = getSupabaseServerClient();
+  const blocked = await rejectIfCancelled(supabase, { id, branchId: branch.id });
+  if (blocked) return blocked;
   const { data: order, error: fetchErr } = await supabase
     .from("orders")
     .select("id, status, pickup_date")
@@ -47,5 +50,6 @@ export async function PATCH(_, { params }) {
     .eq("status", "pending");
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await recordOrderEvent(supabase, { orderId: id, branchId: branch.id, action: "deliver", role: session.role });
   return NextResponse.json({ ok: true });
 }

@@ -27,22 +27,21 @@ function linesFromOrder(order) {
 }
 
 /**
- * Hidden staff corrections: PIN gate, then payment / undeliver / edit items / rename / delete.
+ * Order actions for a logged-in team or admin session. No PIN.
  */
 export default function StaffOrderOverridePanel({
   open,
   order,
   apiPrefix,
   catalog,
-  unlocked,
-  onUnlocked,
+  staffRole = "team",
+  canCompleteToday = false,
+  onDeliver,
+  onNotPickedUp,
+  onRepeat,
   onClose,
   onSuccess
 }) {
-  const [phase, setPhase] = useState("pin");
-  const [pin, setPin] = useState("");
-  const [pinErr, setPinErr] = useState("");
-  const [pinLoading, setPinLoading] = useState(false);
   const [actionErr, setActionErr] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [editLines, setEditLines] = useState([]);
@@ -54,18 +53,19 @@ export default function StaffOrderOverridePanel({
   const [confirmReopenNoshow, setConfirmReopenNoshow] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
 
   const paid = Boolean(order?.paid_at);
   const isDelivered = order?.status === "delivered";
   const isNotPickedUp = order?.status === "not_picked_up";
   const isPending = order?.status === "pending";
+  const isCancelled = Boolean(order?.cancelled_at);
   const displayName = order ? parseEigenesMenueFromCustomerName(order.customer_name).cleanName : "";
-  const blockingConfirm = Boolean(confirmPayment || confirmUndeliver || confirmReopenNoshow || confirmDelete);
+  const blockingConfirm = Boolean(confirmPayment || confirmUndeliver || confirmReopenNoshow || confirmDelete || confirmCancel);
 
   useEffect(() => {
     if (!open || !order) return;
-    setPin("");
-    setPinErr("");
     setActionErr("");
     setActionLoading(false);
     setEditOpen(false);
@@ -76,9 +76,10 @@ export default function StaffOrderOverridePanel({
     setConfirmReopenNoshow(false);
     setConfirmDelete(false);
     setDeleteConfirmText("");
+    setConfirmCancel(false);
+    setCancelReason("");
     setEditLines(linesFromOrder(order));
-    setPhase(unlocked ? "menu" : "pin");
-  }, [open, order, unlocked]);
+  }, [open, order]);
 
   const editTotal = useMemo(
     () => Math.round(editLines.reduce((s, l) => s + l.quantity * l.unitPrice, 0) * 100) / 100,
@@ -118,28 +119,6 @@ export default function StaffOrderOverridePanel({
   }, [catalog, editLines]);
 
   if (!open || !order) return null;
-
-  async function verifyPin(e) {
-    e?.preventDefault();
-    setPinErr("");
-    setPinLoading(true);
-    try {
-      const res = await fetch(`${apiPrefix}/override/verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ pin })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "PIN ungültig.");
-      onUnlocked?.();
-      setPhase("menu");
-    } catch (err) {
-      setPinErr(String(err.message || err));
-    } finally {
-      setPinLoading(false);
-    }
-  }
 
   async function setPayment(nextPaid) {
     setActionErr("");
@@ -276,6 +255,47 @@ export default function StaffOrderOverridePanel({
     }
   }
 
+  async function cancelOrder() {
+    setActionErr("");
+    setActionLoading(true);
+    try {
+      const res = await fetch(`${apiPrefix}/orders/${order.id}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ reason: cancelReason.trim() })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Stornieren fehlgeschlagen.");
+      setConfirmCancel(false);
+      onSuccess?.({ kind: "cancel" });
+      onClose();
+    } catch (err) {
+      setActionErr(String(err.message || err));
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function restoreOrder() {
+    setActionErr("");
+    setActionLoading(true);
+    try {
+      const res = await fetch(`${apiPrefix}/orders/${order.id}/restore`, {
+        method: "POST",
+        credentials: "include"
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Wiederherstellen fehlgeschlagen.");
+      onSuccess?.({ kind: "restore" });
+      onClose();
+    } catch (err) {
+      setActionErr(String(err.message || err));
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   async function hardDeleteOrder() {
     const expected = String(order.order_number ?? "");
     if (deleteConfirmText.trim() !== expected) {
@@ -315,44 +335,16 @@ export default function StaffOrderOverridePanel({
         onClick={(e) => e.stopPropagation()}
       >
         <p id="staff-override-title" className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
-          Korrektur
+          Aktionen
         </p>
         <p className="mt-1 text-lg font-bold text-slate-900">
           Bestellung #{order.order_number}
         </p>
 
-        {phase === "pin" ? (
-          <form onSubmit={verifyPin} className="mt-4 space-y-3">
-            <p className="text-sm text-slate-600">PIN eingeben (nur für Korrekturen).</p>
-            <input
-              type="password"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              autoComplete="off"
-              maxLength={8}
-              className="min-h-12 w-full rounded-xl border border-slate-200 px-4 text-center text-2xl font-bold tracking-[0.3em] text-slate-900"
-              value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-              disabled={pinLoading}
-            />
-            {pinErr ? <p className="text-sm text-red-700">{pinErr}</p> : null}
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={onClose} className="min-h-11 rounded-xl text-sm font-semibold text-slate-600">
-                Abbrechen
-              </button>
-              <button
-                type="submit"
-                disabled={pinLoading || pin.length < 4}
-                className="min-h-11 rounded-xl bg-slate-800 text-sm font-bold text-white disabled:opacity-50"
-              >
-                {pinLoading ? "…" : "Freischalten"}
-              </button>
-            </div>
-          </form>
-        ) : null}
-
-        {phase === "menu" && !editOpen && !renameOpen ? (
-          <div className="mt-4 space-y-2">
+        {!editOpen && !renameOpen ? (
+          <div className="mt-4 space-y-2" role="menu">
+            {!isCancelled ? (
+            <>
             <button
               type="button"
               disabled={actionLoading}
@@ -393,7 +385,9 @@ export default function StaffOrderOverridePanel({
                 „Nicht abgeholt“ rückgängig (Offen)
               </button>
             ) : null}
-            {isPending ? (
+            </>
+            ) : null}
+            {isPending && !isCancelled ? (
               <button
                 type="button"
                 disabled={actionLoading}
@@ -403,18 +397,73 @@ export default function StaffOrderOverridePanel({
                 Artikel bearbeiten
               </button>
             ) : null}
-            <button
-              type="button"
-              disabled={actionLoading}
-              onClick={() => {
-                setActionErr("");
-                setDeleteConfirmText("");
-                setConfirmDelete(true);
-              }}
-              className="min-h-12 w-full rounded-2xl border border-red-200 bg-red-50 px-4 text-left text-sm font-bold text-red-800 hover:bg-red-100"
-            >
-              Bestellung endgültig löschen
-            </button>
+            {isPending && canCompleteToday && !isCancelled ? (
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={() => onDeliver?.(order.id)}
+                className="min-h-12 w-full rounded-2xl bg-brand-green px-4 text-left text-sm font-bold text-white"
+              >
+                Ausgeliefert
+              </button>
+            ) : null}
+            {isPending && canCompleteToday && !isCancelled ? (
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={() => onNotPickedUp?.(order.id)}
+                className="min-h-12 w-full rounded-2xl border border-brand-orange/40 bg-brand-orange/10 px-4 text-left text-sm font-bold text-brand-orange"
+              >
+                Nicht abgeholt
+              </button>
+            ) : null}
+            {!isCancelled && onRepeat ? (
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={() => onRepeat(order)}
+                className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-left text-sm font-bold text-slate-900 hover:bg-slate-50"
+              >
+                Wiederholen
+              </button>
+            ) : null}
+            {!isCancelled ? (
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={() => {
+                  setActionErr("");
+                  setCancelReason("");
+                  setConfirmCancel(true);
+                }}
+                className="min-h-12 w-full rounded-2xl border border-red-200 bg-red-50 px-4 text-left text-sm font-bold text-red-800 hover:bg-red-100"
+              >
+                Stornieren
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={restoreOrder}
+                className="min-h-12 w-full rounded-2xl bg-brand-teal px-4 text-left text-sm font-bold text-white"
+              >
+                Wiederherstellen
+              </button>
+            )}
+            {isCancelled && staffRole === "admin" ? (
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={() => {
+                  setActionErr("");
+                  setDeleteConfirmText("");
+                  setConfirmDelete(true);
+                }}
+                className="min-h-12 w-full rounded-2xl border border-red-300 bg-white px-4 text-left text-sm font-bold text-red-800 hover:bg-red-50"
+              >
+                Endgültig löschen
+              </button>
+            ) : null}
             {actionErr ? <p className="text-sm text-red-700">{actionErr}</p> : null}
             <button type="button" onClick={onClose} className="min-h-11 w-full text-sm font-semibold text-slate-500">
               Schließen
@@ -422,7 +471,7 @@ export default function StaffOrderOverridePanel({
           </div>
         ) : null}
 
-        {phase === "menu" && renameOpen ? (
+        {renameOpen ? (
           <div className="mt-4 space-y-3">
             <p className="text-sm font-semibold text-slate-800">Namen ändern</p>
             <p className="text-xs leading-relaxed text-slate-500">
@@ -462,7 +511,7 @@ export default function StaffOrderOverridePanel({
           </div>
         ) : null}
 
-        {phase === "menu" && editOpen ? (
+        {editOpen ? (
           <div className="mt-4 space-y-3">
             <p className="text-sm font-semibold text-slate-800">Positionen anpassen</p>
             <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-100">
@@ -644,6 +693,50 @@ export default function StaffOrderOverridePanel({
                 className="min-h-11 rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-bold text-white hover:brightness-95 disabled:opacity-50 sm:min-h-0 sm:py-2"
               >
                 {actionLoading ? "…" : "Bestätigen"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmCancel ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4"
+          onClick={() => {
+            if (!actionLoading) {
+              setConfirmCancel(false);
+              setActionErr("");
+            }
+          }}
+          role="presentation"
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <h3 className="text-lg font-bold text-slate-900">Bestellung stornieren?</h3>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              Die Bestellung verschwindet aus Offen und Erledigt. Sie kann unter Storniert wiederhergestellt werden.
+            </p>
+            <label className="mt-3 block text-xs font-semibold text-slate-600">
+              Grund (optional)
+              <input
+                type="text"
+                maxLength={500}
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm text-slate-900"
+              />
+            </label>
+            {actionErr ? <p className="mt-2 text-sm text-red-700">{actionErr}</p> : null}
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button type="button" disabled={actionLoading} onClick={() => setConfirmCancel(false)} className="min-h-11 rounded-xl text-sm font-semibold text-slate-600">
+                Abbrechen
+              </button>
+              <button type="button" disabled={actionLoading} onClick={cancelOrder} className="min-h-11 rounded-xl bg-red-700 text-sm font-bold text-white disabled:opacity-50">
+                {actionLoading ? "…" : "Stornieren"}
               </button>
             </div>
           </div>

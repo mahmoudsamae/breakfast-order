@@ -71,6 +71,26 @@ CREATE INDEX IF NOT EXISTS login_attempts_locked_until_idx
 
 ALTER TABLE public.login_attempts ENABLE ROW LEVEL SECURITY;
 
+-- Soft-cancel. The row stays; lists, revenue and counts ignore it while cancelled_at is set.
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS cancelled_at timestamptz;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS cancel_reason text;
+
+-- One row per order action. order_id stays after a permanent delete.
+CREATE TABLE IF NOT EXISTS public.order_events (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  order_id bigint REFERENCES public.orders (id) ON DELETE SET NULL,
+  branch_id bigint NOT NULL REFERENCES public.branches (id) ON DELETE CASCADE,
+  action text NOT NULL,
+  role text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  details jsonb
+);
+
+CREATE INDEX IF NOT EXISTS order_events_branch_created_idx
+  ON public.order_events (branch_id, created_at DESC);
+
+ALTER TABLE public.order_events ENABLE ROW LEVEL SECURITY;
+
 -- -----------------------------------------------------------------------------
 -- 3) Privileges. service_role keeps access because that is the only app role.
 --    PUBLIC is revoked as well: anon and authenticated would still execute

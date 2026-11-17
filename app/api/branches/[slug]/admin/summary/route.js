@@ -47,12 +47,21 @@ export async function GET(_, { params }) {
     return NextResponse.json({ error: message }, { status });
   }
 
-  const pendingTomorrowRes = await supabase
+  let pendingTomorrowRes = await supabase
     .from("orders")
     .select("id", { count: "exact", head: true })
     .eq("branch_id", branchId)
     .eq("pickup_date", tomorrowPickup)
-    .eq("status", "pending");
+    .eq("status", "pending")
+    .is("cancelled_at", null);
+  if (pendingTomorrowRes.error && String(pendingTomorrowRes.error.message || "").includes("cancelled_at")) {
+    pendingTomorrowRes = await supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("branch_id", branchId)
+      .eq("pickup_date", tomorrowPickup)
+      .eq("status", "pending");
+  }
 
   const { count: registrationsTotal, error: regCountErr } = await supabase
     .from("registrations_analytics")

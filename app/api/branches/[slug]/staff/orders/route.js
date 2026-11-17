@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireBranchSession } from "@/lib/api-branch-guard";
 import { fetchBranchBySlug } from "@/lib/branch-server";
 import { getGuestOrdersPaused } from "@/lib/guest-orders-paused";
+import { recordOrderEvent } from "@/lib/order-events";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { fetchStaffCatalog } from "@/lib/staff-catalog";
 import { getBerlinNow, MAX_QTY_PER_ITEM, tomorrowBerlinDate } from "@/lib/order-utils";
@@ -46,21 +47,23 @@ export async function GET(req, { params }) {
   });
   if (dayErr) return NextResponse.json({ error: dayErr.message }, { status: 500 });
 
-  const { open, done, visible } = partitionStaffPickupDay(dayOrders, staffHiddenSupported);
+  const { open, done, visible, cancelled, active } = partitionStaffPickupDay(dayOrders, staffHiddenSupported);
   const normalizedProducts = packlistProductsFromOrders(open);
   const preparationSummary = {
     products: normalizedProducts,
     menus: menuTotalsFromOrders(open)
   };
-  const dayMatrixPacklist = packlistProductsFromOrders(dayOrders);
+  const dayMatrixPacklist = packlistProductsFromOrders(active);
   const { paused: guestOrdersPaused } = await getGuestOrdersPaused(supabase, branchId);
 
   return NextResponse.json({
     orders: visible,
+    cancelledOrders: cancelled,
     pickupDate,
     counts: {
       open: open.length,
-      done: done.length
+      done: done.length,
+      cancelled: cancelled.length
     },
     staffHiddenSupported,
     preparationSummary,
@@ -72,7 +75,7 @@ export async function GET(req, { params }) {
 }
 
 export async function POST(req, { params }) {
-  const { error: authErr } = await requireBranchSession(params.slug, ["team", "admin"]);
+  const { error: authErr, session } = await requireBranchSession(params.slug, ["team", "admin"]);
   if (authErr) return authErr;
 
   const { branch, error: brErr } = await fetchBranchBySlug(params.slug);
@@ -131,6 +134,13 @@ export async function POST(req, { params }) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     const orderId = data?.[0]?.order_id ?? null;
+    await recordOrderEvent(supabase, {
+      orderId,
+      branchId,
+      action: "create",
+      role: session.role,
+      details: { pickupDate, orderNumber: data?.[0]?.order_number ?? null }
+    });
     if (isTomorrow && body.paidNow === true && orderId) {
       const { error: paidErr } = await supabase
         .from("orders")

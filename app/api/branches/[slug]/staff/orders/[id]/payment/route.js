@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
-import { requireStaffOverride } from "@/lib/api-staff-override-guard";
+import { requireBranchSession } from "@/lib/api-branch-guard";
 import { fetchBranchBySlug } from "@/lib/branch-server";
+import { recordOrderEvent, rejectIfCancelled } from "@/lib/order-events";
 import { isMissingPaidAtColumn } from "@/lib/staff-orders-shared";
 import { getSupabaseServerClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
 export async function PATCH(req, { params }) {
-  const { error: guardErr } = await requireStaffOverride(params.slug);
-  if (guardErr) return guardErr;
+  const { error: authErr, session } = await requireBranchSession(params.slug, ["team", "admin"]);
+  if (authErr) return authErr;
 
   const { branch, error: brErr } = await fetchBranchBySlug(params.slug);
   if (brErr || !branch) return NextResponse.json({ error: "Standort nicht gefunden." }, { status: 404 });
@@ -25,6 +26,8 @@ export async function PATCH(req, { params }) {
     }
 
     const supabase = getSupabaseServerClient();
+    const blocked = await rejectIfCancelled(supabase, { id, branchId: branch.id });
+    if (blocked) return blocked;
     const { data: order, error: loadErr } = await supabase
       .from("orders")
       .select("id,status,pickup_date")
@@ -53,6 +56,13 @@ export async function PATCH(req, { params }) {
     }
     if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
 
+    await recordOrderEvent(supabase, {
+      orderId: id,
+      branchId: branch.id,
+      action: "payment",
+      role: session.role,
+      details: { paid: body.paid }
+    });
     return NextResponse.json({ ok: true, paid: body.paid });
   } catch (e) {
     return NextResponse.json({ error: String(e.message || e) }, { status: 500 });

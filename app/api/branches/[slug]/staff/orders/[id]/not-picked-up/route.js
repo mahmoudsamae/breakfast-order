@@ -3,12 +3,13 @@ import { requireBranchSession } from "@/lib/api-branch-guard";
 import { fetchBranchBySlug } from "@/lib/branch-server";
 import { normalizeNotPickedUpReason } from "@/lib/not-picked-up-reasons";
 import { getBerlinNow } from "@/lib/order-utils";
+import { recordOrderEvent, rejectIfCancelled } from "@/lib/order-events";
 import { getSupabaseServerClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
 export async function PATCH(req, { params }) {
-  const { error: authErr } = await requireBranchSession(params.slug, ["team", "admin"]);
+  const { error: authErr, session } = await requireBranchSession(params.slug, ["team", "admin"]);
   if (authErr) return authErr;
 
   const { branch, error: brErr } = await fetchBranchBySlug(params.slug);
@@ -31,6 +32,8 @@ export async function PATCH(req, { params }) {
   const note = noteRaw.trim().slice(0, 2000) || null;
 
   const supabase = getSupabaseServerClient();
+  const blocked = await rejectIfCancelled(supabase, { id, branchId: branch.id });
+  if (blocked) return blocked;
   const { data: order, error: fetchErr } = await supabase
     .from("orders")
     .select("id, status, pickup_date")
@@ -64,7 +67,16 @@ export async function PATCH(req, { params }) {
     .eq("branch_id", branch.id)
     .eq("status", "pending");
 
-  if (!updateWithReason.error) return NextResponse.json({ ok: true, reasonSaved: true });
+  if (!updateWithReason.error) {
+    await recordOrderEvent(supabase, {
+      orderId: id,
+      branchId: branch.id,
+      action: "not_picked_up",
+      role: session.role,
+      details: { reason }
+    });
+    return NextResponse.json({ ok: true, reasonSaved: true });
+  }
 
   const missingReasonCols =
     updateWithReason.error.code === "42703" ||
@@ -81,5 +93,12 @@ export async function PATCH(req, { params }) {
     .eq("status", "pending");
   if (fallback.error) return NextResponse.json({ error: fallback.error.message }, { status: 500 });
 
+  await recordOrderEvent(supabase, {
+    orderId: id,
+    branchId: branch.id,
+    action: "not_picked_up",
+    role: session.role,
+    details: { reason }
+  });
   return NextResponse.json({ ok: true });
 }

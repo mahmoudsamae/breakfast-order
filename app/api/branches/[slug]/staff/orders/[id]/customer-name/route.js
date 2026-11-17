@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { requireStaffOverride } from "@/lib/api-staff-override-guard";
+import { requireBranchSession } from "@/lib/api-branch-guard";
 import { fetchBranchBySlug } from "@/lib/branch-server";
+import { recordOrderEvent, rejectIfCancelled } from "@/lib/order-events";
 import { getSupabaseServerClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -9,11 +10,10 @@ const EM_SUFFIX = " · EM:";
 
 /**
  * Rename customer (display name only). Preserves „Eigenes Menü“ suffix in customer_name if present.
- * Requires staff session + override PIN cookie.
  */
 export async function PATCH(req, { params }) {
-  const { error: guardErr } = await requireStaffOverride(params.slug);
-  if (guardErr) return guardErr;
+  const { error: authErr, session } = await requireBranchSession(params.slug, ["team", "admin"]);
+  if (authErr) return authErr;
 
   const { branch, error: brErr } = await fetchBranchBySlug(params.slug);
   if (brErr || !branch) return NextResponse.json({ error: "Standort nicht gefunden." }, { status: 404 });
@@ -37,6 +37,8 @@ export async function PATCH(req, { params }) {
     }
 
     const supabase = getSupabaseServerClient();
+    const blocked = await rejectIfCancelled(supabase, { id, branchId: branch.id });
+    if (blocked) return blocked;
     const { data: order, error: loadErr } = await supabase
       .from("orders")
       .select("id,customer_name")
@@ -60,6 +62,13 @@ export async function PATCH(req, { params }) {
 
     if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
 
+    await recordOrderEvent(supabase, {
+      orderId: id,
+      branchId: branch.id,
+      action: "rename",
+      role: session.role,
+      details: { customerName: customer_name }
+    });
     return NextResponse.json({ ok: true, customerName: customer_name });
   } catch (e) {
     return NextResponse.json({ error: String(e.message || e) }, { status: 500 });
